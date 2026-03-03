@@ -160,7 +160,7 @@ services:
       APP_PORT: 3000
       APP_ENV: production
       API_PREFIX: api/v1
-      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://ai.tino.vn,https://*.ai.tino.vn}
 
       # Database
       MASTER_DATABASE_URL: postgresql://${POSTGRES_USER:-tino_admin}:${POSTGRES_PASSWORD:-tino_secret_2024}@postgresql:5432/${POSTGRES_DB:-tino_master}

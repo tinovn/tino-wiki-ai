@@ -12,10 +12,19 @@ async function bootstrap() {
   const apiPrefix = configService.get<string>('app.apiPrefix', 'api/v1');
   app.setGlobalPrefix(apiPrefix);
 
-  // CORS
+  // CORS (supports wildcard subdomains like https://*.ai.tino.vn)
   const corsOrigins = configService.get<string>('app.corsOrigins', '');
+  const origins: (string | RegExp)[] = corsOrigins
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
+    .map((o) =>
+      o.includes('*')
+        ? new RegExp('^' + o.replace(/\./g, '\\.').replace('*', '[^.]+') + '$')
+        : o,
+    );
   app.enableCors({
-    origin: corsOrigins.split(',').map((o) => o.trim()),
+    origin: origins,
     credentials: true,
   });
 
