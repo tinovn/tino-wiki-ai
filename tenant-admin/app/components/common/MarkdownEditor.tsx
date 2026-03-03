@@ -151,7 +151,7 @@ function ToolbarDivider() {
 }
 
 interface MenuBarProps {
-  editor: ReturnType<typeof useEditor>;
+  editor: ReturnType<typeof useEditor> | null;
 }
 
 function MenuBar({ editor }: MenuBarProps) {
