@@ -1,0 +1,249 @@
+// prisma/schema.prisma -- MASTER DATABASE
+// Manages tenant registry, plans, global admin
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/master-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("MASTER_DATABASE_URL")
+}
+
+model Tenant {
+  id           String       @id @default(uuid()) @db.Uuid
+  name         String
+  slug         String       @unique
+  domain       String?      @unique
+  databaseUrl  String       @map("database_url")
+  databaseName String       @map("database_name")
+  plan         PlanType     @default(FREE)
+  status       TenantStatus @default(ACTIVE)
+  settings     Json         @default("{}")
+  llmProvider  String       @default("vllm") @map("llm_provider")
+  llmConfig    Json         @default("{}") @map("llm_config")
+  maxDocuments Int          @default(100) @map("max_documents")
+  maxQueriesMonth Int       @default(1000) @map("max_queries_month")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  adminUsers TenantAdmin[]
+  apiKeys    ApiKey[]
+
+  @@map("tenants")
+}
+
+model TenantAdmin {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  email     String
+  password  String
+  role      AdminRole @default(OWNER)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@map("tenant_admins")
+}
+
+model ApiKey {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  key        String    @unique
+  name       String
+  scopes     String[]
+  expiresAt  DateTime? @map("expires_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+enum PlanType {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_SETUP
+  DEACTIVATED
+}
+
+enum AdminRole {
+  OWNER
+  ADMIN
+  VIEWER
+}
+
+// ─── SUPER ADMIN (Platform-level) ───────────────────────────
+
+model SuperAdmin {
+  id          String         @id @default(uuid()) @db.Uuid
+  email       String         @unique
+  password    String
+  displayName String         @map("display_name")
+  role        SuperAdminRole @default(ADMIN)
+  isActive    Boolean        @default(true) @map("is_active")
+  lastLoginAt DateTime?      @map("last_login_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  masterDocuments MasterDocument[] @relation("masterAuthor")
+
+  @@map("super_admins")
+}
+
+enum SuperAdminRole {
+  SUPER_OWNER
+  ADMIN
+  VIEWER
+}
+
+// ─── MASTER WIKI (Domain-specific Knowledge Base) ───────────
+
+model MasterDocument {
+  id             String               @id @default(uuid()) @db.Uuid
+  title          String
+  slug           String               @unique
+  content        String               @db.Text
+  excerpt        String?              @db.Text
+  status         MasterDocumentStatus @default(DRAFT)
+  publishedAt    DateTime?            @map("published_at")
+  authorId       String               @map("author_id") @db.Uuid
+  categoryId     String?              @map("category_id") @db.Uuid
+  currentVersion Int                  @default(1) @map("current_version")
+  wordCount      Int                  @default(0) @map("word_count")
+  metadata       Json                 @default("{}")
+  isDeleted      Boolean              @default(false) @map("is_deleted")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  author   SuperAdmin              @relation("masterAuthor", fields: [authorId], references: [id])
+  category MasterCategory?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tags     MasterDocumentTag[]
+  versions MasterDocumentVersion[]
+  chunks   MasterDocumentChunk[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([isDeleted])
+  @@map("master_documents")
+}
+
+enum MasterDocumentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model MasterDocumentVersion {
+  id          String   @id @default(uuid()) @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  version     Int
+  title       String
+  content     String   @db.Text
+  changeNote  String?  @map("change_note") @db.Text
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  document MasterDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@map("master_document_versions")
+}
+
+model MasterCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  description String?  @db.Text
+  parentId    String?  @map("parent_id") @db.Uuid
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  parent    MasterCategory?  @relation("MasterCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  MasterCategory[] @relation("MasterCategoryTree")
+  documents MasterDocument[]
+
+  @@map("master_categories")
+}
+
+model MasterTag {
+  id        String              @id @default(uuid()) @db.Uuid
+  name      String              @unique
+  slug      String              @unique
+  color     String?
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  documents MasterDocumentTag[]
+
+  @@map("master_tags")
+}
+
+model MasterDocumentTag {
+  documentId String @map("document_id") @db.Uuid
+  tagId      String @map("tag_id") @db.Uuid
+
+  document MasterDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  tag      MasterTag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([documentId, tagId])
+  @@map("master_document_tags")
+}
+
+model MasterDocumentChunk {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  chunkIndex Int      @map("chunk_index")
+  content    String   @db.Text
+  heading    String?
+  tokenCount Int      @map("token_count")
+  vectorId   String?  @map("vector_id")
+  version    Int
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  document MasterDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex, version])
+  @@index([documentId])
+  @@index([vectorId])
+  @@map("master_document_chunks")
+}
+
+model MasterAiProcessingJob {
+  id          String                 @id @default(uuid()) @db.Uuid
+  documentId  String                 @map("document_id") @db.Uuid
+  version     Int
+  status      MasterProcessingStatus @default(PENDING)
+  steps       Json                   @default("[]")
+  startedAt   DateTime?              @map("started_at")
+  completedAt DateTime?              @map("completed_at")
+  error       String?                @db.Text
+  retryCount  Int                    @default(0) @map("retry_count")
+  createdAt   DateTime               @default(now()) @map("created_at")
+
+  @@index([documentId])
+  @@index([status])
+  @@map("master_ai_processing_jobs")
+}
+
+enum MasterProcessingStatus {
+  PENDING
+  CLEANING
+  CHUNKING
+  EMBEDDING
+  COMPLETED
+  FAILED
+}

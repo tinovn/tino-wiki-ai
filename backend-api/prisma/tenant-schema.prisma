@@ -1,0 +1,514 @@
+// prisma/tenant-schema.prisma -- PER-TENANT DATABASE
+// Each tenant gets their own PostgreSQL database with this schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/tenant-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("TENANT_DATABASE_URL")
+}
+
+// ──────────────────────────────────────
+// USER & AUTH
+// ──────────────────────────────────────
+
+model User {
+  id          String    @id @default(uuid()) @db.Uuid
+  email       String    @unique
+  password    String
+  displayName String    @map("display_name")
+  role        UserRole  @default(AGENT)
+  isActive    Boolean   @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  documents    Document[]    @relation("author")
+  feedbacks    Feedback[]
+  queryLogs    QueryLog[]
+  crawlSources CrawlSource[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  AGENT
+  VIEWER
+}
+
+// ──────────────────────────────────────
+// WIKI: DOCUMENTS, CATEGORIES, TAGS, VERSIONS
+// ──────────────────────────────────────
+
+model Document {
+  id             String         @id @default(uuid()) @db.Uuid
+  title          String
+  slug           String         @unique
+  content        String         @db.Text
+  excerpt        String?        @db.Text
+  status         DocumentStatus @default(DRAFT)
+  publishedAt    DateTime?      @map("published_at")
+  authorId       String         @map("author_id") @db.Uuid
+  categoryId     String?        @map("category_id") @db.Uuid
+  currentVersion Int            @default(1) @map("current_version")
+  wordCount      Int            @default(0) @map("word_count")
+  metadata       Json           @default("{}")
+  isDeleted      Boolean        @default(false) @map("is_deleted")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  author           User                @relation("author", fields: [authorId], references: [id])
+  category         Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tags             DocumentTag[]
+  versions         DocumentVersion[]
+  summaries        DocumentSummary[]
+  intents          DocumentIntent[]
+  chunks           DocumentChunk[]
+  feedbacks        Feedback[]
+  aiProcessingJobs AiProcessingJob[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([isDeleted])
+  @@index([publishedAt])
+  @@map("documents")
+}
+
+enum DocumentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model DocumentVersion {
+  id          String   @id @default(uuid()) @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  version     Int
+  title       String
+  content     String   @db.Text
+  changeNote  String?  @map("change_note") @db.Text
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@map("document_versions")
+}
+
+model Category {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String     @unique
+  description String?    @db.Text
+  parentId    String?    @map("parent_id") @db.Uuid
+  sortOrder   Int        @default(0) @map("sort_order")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  parent       Category?     @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Category[]    @relation("CategoryTree")
+  documents    Document[]
+  crawlSources CrawlSource[]
+
+  @@map("categories")
+}
+
+model Tag {
+  id        String        @id @default(uuid()) @db.Uuid
+  name      String        @unique
+  slug      String        @unique
+  color     String?
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  documents DocumentTag[]
+
+  @@map("tags")
+}
+
+model DocumentTag {
+  documentId String @map("document_id") @db.Uuid
+  tagId      String @map("tag_id") @db.Uuid
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([documentId, tagId])
+  @@map("document_tags")
+}
+
+// ──────────────────────────────────────
+// AI PROCESSING ARTIFACTS
+// ──────────────────────────────────────
+
+model DocumentSummary {
+  id         String      @id @default(uuid()) @db.Uuid
+  documentId String      @map("document_id") @db.Uuid
+  type       SummaryType
+  content    String      @db.Text
+  version    Int
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, type, version])
+  @@map("document_summaries")
+}
+
+enum SummaryType {
+  SHORT
+  MEDIUM
+  KEY_POINTS
+}
+
+model DocumentIntent {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  intent     String
+  confidence Float
+  version    Int
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([intent])
+  @@map("document_intents")
+}
+
+model DocumentChunk {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  chunkIndex Int      @map("chunk_index")
+  content    String   @db.Text
+  heading    String?
+  tokenCount Int      @map("token_count")
+  vectorId   String?  @map("vector_id")
+  version    Int
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex, version])
+  @@index([documentId])
+  @@index([vectorId])
+  @@map("document_chunks")
+}
+
+model AiProcessingJob {
+  id          String           @id @default(uuid()) @db.Uuid
+  documentId  String           @map("document_id") @db.Uuid
+  version     Int
+  status      ProcessingStatus @default(PENDING)
+  steps       Json             @default("[]")
+  startedAt   DateTime?        @map("started_at")
+  completedAt DateTime?        @map("completed_at")
+  error       String?          @db.Text
+  retryCount  Int              @default(0) @map("retry_count")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([status])
+  @@map("ai_processing_jobs")
+}
+
+enum ProcessingStatus {
+  PENDING
+  CLEANING
+  SUMMARIZING
+  DETECTING_INTENTS
+  CHUNKING
+  EMBEDDING
+  COMPLETED
+  FAILED
+}
+
+// ──────────────────────────────────────
+// CUSTOMER & MEMORY
+// ──────────────────────────────────────
+
+model Customer {
+  id         String   @id @default(uuid()) @db.Uuid
+  externalId String?  @unique @map("external_id")
+  name       String?
+  email      String?
+  phone      String?
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  memories      CustomerMemory[]
+  conversations Conversation[]
+  queryLogs     QueryLog[]
+
+  @@index([email])
+  @@index([externalId])
+  @@map("customers")
+}
+
+model CustomerMemory {
+  id         String       @id @default(uuid()) @db.Uuid
+  customerId String       @map("customer_id") @db.Uuid
+  type       MemoryType
+  key        String
+  value      String       @db.Text
+  source     MemorySource
+  confidence Float        @default(1.0)
+  expiresAt  DateTime?    @map("expires_at")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, type, key])
+  @@index([customerId])
+  @@index([type])
+  @@map("customer_memories")
+}
+
+enum MemoryType {
+  PREFERENCE
+  PRODUCT_INTEREST
+  ISSUE_HISTORY
+  NOTE
+  CONTEXT
+}
+
+enum MemorySource {
+  AI_EXTRACTED
+  AGENT_MANUAL
+  SYSTEM
+}
+
+model Conversation {
+  id         String             @id @default(uuid()) @db.Uuid
+  customerId String             @map("customer_id") @db.Uuid
+  channel    String             @default("chat")
+  status     ConversationStatus @default(ACTIVE)
+  startedAt  DateTime           @default(now()) @map("started_at")
+  endedAt    DateTime?          @map("ended_at")
+
+  customer Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  messages ConversationMessage[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("conversations")
+}
+
+enum ConversationStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+model ConversationMessage {
+  id             String      @id @default(uuid()) @db.Uuid
+  conversationId String      @map("conversation_id") @db.Uuid
+  role           MessageRole
+  content        String      @db.Text
+  metadata       Json        @default("{}")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("conversation_messages")
+}
+
+enum MessageRole {
+  CUSTOMER
+  AGENT
+  AI_ASSISTANT
+  SYSTEM
+}
+
+// ──────────────────────────────────────
+// ANALYTICS & QUERY LOGS
+// ──────────────────────────────────────
+
+model QueryLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  question       String   @db.Text
+  answer         String?  @db.Text
+  customerId     String?  @map("customer_id") @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  conversationId String?  @map("conversation_id") @db.Uuid
+  sourceDocIds   String[] @map("source_doc_ids")
+  searchLayers   String[] @map("search_layers")
+  confidence     Float?
+  latencyMs      Int?     @map("latency_ms")
+  tokenUsage     Json?    @map("token_usage")
+  wasSuccessful  Boolean  @default(true) @map("was_successful")
+  failureReason  String?  @map("failure_reason")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  customer  Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  feedbacks Feedback[]
+
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([wasSuccessful])
+  @@map("query_logs")
+}
+
+model ContentGap {
+  id             String    @id @default(uuid()) @db.Uuid
+  question       String    @db.Text
+  frequency      Int       @default(1)
+  suggestedTitle String?   @map("suggested_title")
+  suggestedTags  String[]  @map("suggested_tags")
+  status         GapStatus @default(OPEN)
+  resolvedDocId  String?   @map("resolved_doc_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("content_gaps")
+}
+
+enum GapStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  DISMISSED
+}
+
+// ──────────────────────────────────────
+// FEEDBACK
+// ──────────────────────────────────────
+
+model Feedback {
+  id         String       @id @default(uuid()) @db.Uuid
+  queryLogId String       @map("query_log_id") @db.Uuid
+  documentId String?      @map("document_id") @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  type       FeedbackType
+  comment    String?      @db.Text
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  queryLog QueryLog  @relation(fields: [queryLogId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  user     User      @relation(fields: [userId], references: [id])
+
+  @@index([queryLogId])
+  @@index([documentId])
+  @@index([type])
+  @@map("feedbacks")
+}
+
+enum FeedbackType {
+  GOOD
+  BAD
+  PARTIALLY_CORRECT
+  WRONG_SOURCE
+  OUTDATED
+}
+
+// ──────────────────────────────────────
+// WEB CRAWLER
+// ──────────────────────────────────────
+
+enum CrawlSourceType {
+  URL
+  SITEMAP
+  RSS
+  API
+}
+
+enum CrawlSourceStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+enum CrawlJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum CrawlResultStatus {
+  SUCCESS
+  SKIPPED
+  FAILED
+}
+
+model CrawlSource {
+  id          String            @id @default(uuid()) @db.Uuid
+  name        String
+  type        CrawlSourceType
+  url         String            @db.Text
+  config      Json              @default("{}")
+  categoryId  String?           @map("category_id") @db.Uuid
+  tagIds      String[]          @map("tag_ids")
+  schedule    String?
+  status      CrawlSourceStatus @default(ACTIVE)
+  lastCrawlAt DateTime?         @map("last_crawl_at")
+  createdById String            @map("created_by_id") @db.Uuid
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  createdBy User      @relation(fields: [createdById], references: [id])
+  category  Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  jobs      CrawlJob[]
+
+  @@index([status])
+  @@index([type])
+  @@map("crawl_sources")
+}
+
+model CrawlJob {
+  id            String         @id @default(uuid()) @db.Uuid
+  sourceId      String         @map("source_id") @db.Uuid
+  status        CrawlJobStatus @default(PENDING)
+  totalUrls     Int            @default(0) @map("total_urls")
+  processedUrls Int            @default(0) @map("processed_urls")
+  newDocuments  Int            @default(0) @map("new_documents")
+  updatedDocs   Int            @default(0) @map("updated_docs")
+  skippedUrls   Int            @default(0) @map("skipped_urls")
+  failedUrls    Int            @default(0) @map("failed_urls")
+  error         String?        @db.Text
+  startedAt     DateTime?      @map("started_at")
+  completedAt   DateTime?      @map("completed_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  source  CrawlSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  results CrawlResult[]
+
+  @@index([sourceId])
+  @@index([status])
+  @@map("crawl_jobs")
+}
+
+model CrawlResult {
+  id          String            @id @default(uuid()) @db.Uuid
+  jobId       String            @map("job_id") @db.Uuid
+  url         String            @db.Text
+  status      CrawlResultStatus @default(SUCCESS)
+  title       String?
+  contentHash String?           @map("content_hash")
+  documentId  String?           @map("document_id") @db.Uuid
+  error       String?           @db.Text
+  metadata    Json              @default("{}")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  job CrawlJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([contentHash])
+  @@index([url])
+  @@map("crawl_results")
+}

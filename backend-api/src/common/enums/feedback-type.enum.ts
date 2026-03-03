@@ -1,0 +1,7 @@
+export enum FeedbackType {
+  GOOD = 'GOOD',
+  BAD = 'BAD',
+  PARTIALLY_CORRECT = 'PARTIALLY_CORRECT',
+  WRONG_SOURCE = 'WRONG_SOURCE',
+  OUTDATED = 'OUTDATED',
+}
