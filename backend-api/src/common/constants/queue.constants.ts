@@ -5,6 +5,7 @@ export const QUEUES = {
   PREFERENCE_EXTRACTION: 'preference-extraction',
   ANALYTICS: 'analytics',
   CRAWLER: 'crawler',
+  NOTIFICATION: 'notification',
 } as const;
 
 export const JOBS = {
@@ -22,4 +23,5 @@ export const JOBS = {
   CRAWL_URL: 'crawl-url',
   RECRAWL_STALE: 'recrawl-stale',
   SCHEDULED_CRAWL: 'scheduled-crawl',
+  SEND_NOTIFICATION: 'send-notification',
 } as const;

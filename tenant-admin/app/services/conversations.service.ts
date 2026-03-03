@@ -70,6 +70,11 @@ export const conversationsService = {
     return res.data.data;
   },
 
+  async getRelated(id: string): Promise<InboxConversation[]> {
+    const res = await apiClient.get<ApiResponse<InboxConversation[]>>(`/conversations/${id}/related`);
+    return res.data.data;
+  },
+
   // Canned responses
   async getCannedResponses(): Promise<CannedResponse[]> {
     const res = await apiClient.get<ApiResponse<CannedResponse[]>>('/conversations/canned-responses');

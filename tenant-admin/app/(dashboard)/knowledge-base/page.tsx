@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, Table, Progress, Space, Typography, Button, Modal, Form, Input, InputNumber, Popconfirm, App } from 'antd';
+import { Card, Table, Progress, Space, Typography, Button, Modal, Form, Input, InputNumber, Popconfirm, App, Statistic, Row, Col, Popover, Tag } from 'antd';
 import {
   BookOutlined,
   CheckCircleOutlined,
@@ -10,11 +10,15 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
+  ThunderboltOutlined,
+  DatabaseOutlined,
+  WarningOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import PageHeader from '@/components/layout/PageHeader';
 import KpiCard from '@/components/dashboard/KpiCard';
-import { useDocuments } from '@/hooks/useDocuments';
+import { useDocuments, useIndexingStats, useBulkReprocess } from '@/hooks/useDocuments';
 import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory } from '@/hooks/useCategories';
 import type { Category, CreateCategoryRequest } from '@/types/category';
 
@@ -25,6 +29,8 @@ export default function KnowledgeBasePage() {
   const { data: publishedDocs } = useDocuments({ status: 'PUBLISHED', limit: 1 });
   const { data: draftDocs } = useDocuments({ status: 'DRAFT', limit: 1 });
   const { data: categories, isLoading: catsLoading } = useCategories();
+  const { data: indexingStats, isLoading: statsLoading } = useIndexingStats();
+  const bulkReprocess = useBulkReprocess();
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
   const deleteCategory = useDeleteCategory();
@@ -144,21 +150,101 @@ export default function KnowledgeBasePage() {
       </section>
 
       <section className="main-grid">
-        <Card title="Indexing Status" size="small">
-          <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            <div>
-              <Text>Published documents</Text>
-              <Progress percent={indexProgress} status="active" />
-            </div>
-            <div>
-              <Text>Draft documents</Text>
-              <Progress
-                percent={totalDocs > 0 ? Math.round((draftCount / totalDocs) * 100) : 0}
-                status="normal"
-                strokeColor="#faad14"
+        <Card
+          title="AI Vector Index"
+          size="small"
+          extra={
+            <Popover
+              title="Reprocess all published documents?"
+              content={
+                <Space direction="vertical" size="small">
+                  <Text type="secondary">Re-enqueue documents chưa có embedding hoặc đã failed.</Text>
+                  <Space>
+                    <Button
+                      size="small"
+                      type="primary"
+                      loading={bulkReprocess.isPending}
+                      onClick={async () => {
+                        try {
+                          const r = await bulkReprocess.mutateAsync(false);
+                          message.success(`Enqueued ${r.enqueued} documents (skipped ${r.skipped})`);
+                        } catch { message.error('Reprocess failed'); }
+                      }}
+                    >
+                      Missing only
+                    </Button>
+                    <Button
+                      size="small"
+                      danger
+                      loading={bulkReprocess.isPending}
+                      onClick={async () => {
+                        try {
+                          const r = await bulkReprocess.mutateAsync(true);
+                          message.success(`Force reprocess: enqueued ${r.enqueued}/${r.total}`);
+                        } catch { message.error('Reprocess failed'); }
+                      }}
+                    >
+                      Force all
+                    </Button>
+                  </Space>
+                </Space>
+              }
+              trigger="click"
+            >
+              <Button size="small" icon={<SyncOutlined />}>Reprocess</Button>
+            </Popover>
+          }
+        >
+          <Row gutter={[16, 16]}>
+            <Col span={8}>
+              <Statistic
+                title="Indexed"
+                value={indexingStats?.indexed ?? 0}
+                suffix={<Text type="secondary">/ {indexingStats?.totalPublished ?? 0}</Text>}
+                valueStyle={{ color: '#52c41a' }}
+                prefix={<CheckCircleOutlined />}
+                loading={statsLoading}
               />
-            </div>
-          </Space>
+            </Col>
+            <Col span={8}>
+              <Statistic
+                title="Vectors"
+                value={indexingStats?.vectorCount ?? 0}
+                prefix={<DatabaseOutlined />}
+                loading={statsLoading}
+              />
+            </Col>
+            <Col span={8}>
+              <Statistic
+                title="Chunks"
+                value={indexingStats?.chunks ?? 0}
+                prefix={<ThunderboltOutlined />}
+                loading={statsLoading}
+              />
+            </Col>
+          </Row>
+
+          <div style={{ marginTop: 16 }}>
+            <Text>Indexing progress</Text>
+            <Progress
+              percent={indexingStats?.totalPublished ? Math.round((indexingStats.indexed / indexingStats.totalPublished) * 100) : 0}
+              status={indexingStats?.failed ? 'exception' : 'active'}
+            />
+          </div>
+
+          {((indexingStats?.failed ?? 0) > 0 || (indexingStats?.notProcessed ?? 0) > 0 || (indexingStats?.pending ?? 0) > 0) && (
+            <Space style={{ marginTop: 8 }} wrap>
+              {(indexingStats?.pending ?? 0) > 0 && (
+                <Tag icon={<SyncOutlined spin />} color="processing">{indexingStats!.pending} processing</Tag>
+              )}
+              {(indexingStats?.failed ?? 0) > 0 && (
+                <Tag icon={<WarningOutlined />} color="error">{indexingStats!.failed} failed</Tag>
+              )}
+              {(indexingStats?.notProcessed ?? 0) > 0 && (
+                <Tag icon={<ClockCircleOutlined />} color="warning">{indexingStats!.notProcessed} not processed</Tag>
+              )}
+            </Space>
+          )}
         </Card>
 
         <Card

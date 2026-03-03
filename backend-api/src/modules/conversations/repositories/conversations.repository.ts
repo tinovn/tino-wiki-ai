@@ -164,7 +164,7 @@ export class ConversationsRepository {
     const prisma = await this.tenantPrisma.getClient();
     return prisma.conversation.update({
       where: { id },
-      data: { status: 'CLOSED', endedAt: new Date() },
+      data: { status: 'CLOSED', endedAt: new Date(), assignedAgentId: null, isHandoff: false, handoffReason: null },
     });
   }
 
@@ -181,6 +181,28 @@ export class ConversationsRepository {
     return prisma.conversation.update({
       where: { id },
       data: { unreadCount: 0 },
+    });
+  }
+
+  /**
+   * Find all conversations for a customer across channels, excluding a given conversation.
+   */
+  async findByCustomer(customerId: string, excludeConversationId?: string) {
+    const prisma = await this.tenantPrisma.getClient();
+    const where: Record<string, unknown> = { customerId };
+    if (excludeConversationId) {
+      where.id = { not: excludeConversationId };
+    }
+    return prisma.conversation.findMany({
+      where,
+      include: {
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { content: true, role: true, createdAt: true },
+        },
+      },
+      orderBy: { lastMessageAt: { sort: 'desc', nulls: 'last' } },
     });
   }
 

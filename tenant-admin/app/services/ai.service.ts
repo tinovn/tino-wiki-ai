@@ -64,4 +64,24 @@ export const aiService = {
   async updateSettings(data: { allowGeneralKnowledge?: boolean }): Promise<void> {
     await apiClient.patch('/ai/settings', data);
   },
+
+  async getMessages(): Promise<{
+    global: Record<string, string>;
+    messenger: Record<string, string>;
+    telegram: Record<string, string>;
+    chatwidget: Record<string, string>;
+    defaults: Record<string, string>;
+  }> {
+    const res = await apiClient.get<ApiResponse<any>>('/ai/messages');
+    return res.data.data;
+  },
+
+  async updateMessages(data: {
+    global?: Record<string, string>;
+    messenger?: Record<string, string>;
+    telegram?: Record<string, string>;
+    chatwidget?: Record<string, string>;
+  }): Promise<void> {
+    await apiClient.patch('/ai/messages', data);
+  },
 };

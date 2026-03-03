@@ -7,9 +7,11 @@ import {
   UserOutlined,
   IdcardOutlined,
   BulbOutlined,
+  MessageOutlined,
 } from '@ant-design/icons';
-import { useConversation, useConversationNotes, useUpdateConversation } from '@/hooks/useConversations';
+import { useConversation, useConversationNotes, useRelatedConversations, useUpdateConversation } from '@/hooks/useConversations';
 import type { ConversationPriority } from '@/types/conversation';
+import type { InboxConversation } from '@/types/conversation';
 import dayjs from 'dayjs';
 
 const { Text, Title } = Typography;
@@ -37,6 +39,7 @@ interface Props {
 export default function CustomerDetailsPanel({ conversationId }: Props) {
   const { data: conversation } = useConversation(conversationId);
   const { data: notes } = useConversationNotes(conversationId);
+  const { data: related } = useRelatedConversations(conversationId);
   const updateConv = useUpdateConversation();
 
   if (!conversationId || !conversation) {
@@ -147,6 +150,33 @@ export default function CustomerDetailsPanel({ conversationId }: Props) {
               </div>
             ),
           },
+          ...((related && related.length > 0) ? [{
+            key: 'related',
+            label: `Hội thoại liên quan (${related.length})`,
+            children: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {related.map((r: InboxConversation) => (
+                  <Card key={r.id} size="small" styles={{ body: { padding: '6px 10px' } }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <MessageOutlined style={{ fontSize: 12 }} />
+                      <Tag style={{ fontSize: 10, margin: 0 }}>{r.channel}</Tag>
+                      <Tag color={r.status === 'ACTIVE' ? 'green' : 'default'} style={{ fontSize: 10, margin: 0 }}>
+                        {r.status}
+                      </Tag>
+                    </div>
+                    {r.lastMessage && (
+                      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }} ellipsis>
+                        {r.lastMessage.content}
+                      </Text>
+                    )}
+                    <Text type="secondary" style={{ fontSize: 10 }}>
+                      {r.lastMessageAt ? dayjs(r.lastMessageAt).format('DD/MM HH:mm') : dayjs(r.startedAt).format('DD/MM HH:mm')}
+                    </Text>
+                  </Card>
+                ))}
+              </div>
+            ),
+          }] : []),
         ]}
       />
     </div>

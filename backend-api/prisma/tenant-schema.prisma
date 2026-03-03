@@ -27,13 +27,15 @@ model User {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  documents                Document[]          @relation("author")
+  documents                Document[]               @relation("author")
   feedbacks                Feedback[]
   queryLogs                QueryLog[]
   crawlSources             CrawlSource[]
-  assignedConversations    Conversation[]      @relation("assigned_conversations")
-  conversationNotes        ConversationNote[]  @relation("conversation_notes")
-  cannedResponses          CannedResponse[]    @relation("canned_responses")
+  assignedConversations    Conversation[]            @relation("assigned_conversations")
+  conversationNotes        ConversationNote[]        @relation("conversation_notes")
+  cannedResponses          CannedResponse[]          @relation("canned_responses")
+  pushSubscriptions        PushSubscription[]
+  notificationPreference   NotificationPreference?
 
   @@map("users")
 }
@@ -567,6 +569,52 @@ model CrawlJob {
   @@index([sourceId])
   @@index([status])
   @@map("crawl_jobs")
+}
+
+// ──────────────────────────────────────
+// PUSH NOTIFICATIONS
+// ──────────────────────────────────────
+
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  type      PushType
+  endpoint  String   @db.Text
+  keys      Json     @default("{}")
+  userAgent String?  @map("user_agent")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+  @@index([userId])
+  @@index([isActive])
+  @@map("push_subscriptions")
+}
+
+enum PushType {
+  WEB_PUSH
+  FCM
+}
+
+model NotificationPreference {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @unique @map("user_id") @db.Uuid
+  desktopEnabled     Boolean  @default(true) @map("desktop_enabled")
+  mobilePushEnabled  Boolean  @default(true) @map("mobile_push_enabled")
+  soundEnabled       Boolean  @default(true) @map("sound_enabled")
+  newMessageEnabled  Boolean  @default(true) @map("new_message_enabled")
+  handoffEnabled     Boolean  @default(true) @map("handoff_enabled")
+  assignmentEnabled  Boolean  @default(true) @map("assignment_enabled")
+  mutedConversations String[] @default([]) @map("muted_conversations")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
 }
 
 model CrawlResult {

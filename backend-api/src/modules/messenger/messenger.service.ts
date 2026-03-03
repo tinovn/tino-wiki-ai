@@ -1,4 +1,4 @@
-import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '@core/database/prisma/prisma.service';
@@ -6,6 +6,9 @@ import { PrismaClientManager } from '@core/database/prisma/prisma-client.manager
 import { QueryEngineService } from '@modules/ai/services/query-engine.service';
 import { HandoffService } from '@modules/conversations/services/handoff.service';
 import { CONVERSATION_EVENTS } from '@modules/conversations/interfaces/conversation-events.interface';
+import { CustomerMessageEvent } from '@core/event-bus/events/customer-message.event';
+import { EcommerceChatbotService } from '@modules/ecommerce-chatbot/ecommerce-chatbot.service';
+import { resolveTenantMessage } from '@common/utils';
 import { FacebookApiService } from './facebook-api.service';
 import { FacebookWebhookDto, FbMessaging } from './dto/facebook-webhook.dto';
 
@@ -26,6 +29,7 @@ export class MessengerService {
     private readonly fbApi: FacebookApiService,
     private readonly eventEmitter: EventEmitter2,
     private readonly handoffService: HandoffService,
+    @Optional() private readonly ecommerceChatbot?: EcommerceChatbotService,
   ) {}
 
   async handleWebhook(body: FacebookWebhookDto, rawBody: Buffer, signature: string): Promise<void> {
@@ -91,14 +95,31 @@ export class MessengerService {
         this.logger.log(`Created new customer for PSID ${psid}`);
       }
 
-      // 5. Find or create active conversation
+      // 5. Find or create conversation (always reuse existing)
       let conversation = await db.conversation.findFirst({
-        where: { customerId: customer.id, channel: 'messenger', status: 'ACTIVE' },
+        where: { customerId: customer.id, channel: 'messenger' },
         orderBy: { startedAt: 'desc' },
       });
       if (!conversation) {
         conversation = await db.conversation.create({
           data: { customerId: customer.id, channel: 'messenger' },
+        });
+        // Send welcome message for new conversations
+        const welcomeMsg = resolveTenantMessage(tenant.settings, 'welcomeMessage', 'messenger');
+        await this.fbApi.sendMessage(psid, welcomeMsg, config.pageAccessToken);
+        await db.conversationMessage.create({
+          data: { conversationId: conversation.id, role: 'SYSTEM', content: welcomeMsg, metadata: { event: 'welcome' } },
+        });
+      } else if (conversation.status === 'CLOSED') {
+        conversation = await db.conversation.update({
+          where: { id: conversation.id },
+          data: { status: 'ACTIVE', endedAt: null },
+        });
+        // Send welcome back message
+        const welcomeBackMsg = resolveTenantMessage(tenant.settings, 'welcomeBackMessage', 'messenger');
+        await this.fbApi.sendMessage(psid, welcomeBackMsg, config.pageAccessToken);
+        await db.conversationMessage.create({
+          data: { conversationId: conversation.id, role: 'SYSTEM', content: welcomeBackMsg, metadata: { event: 'conversation_reopened' } },
         });
       }
 
@@ -129,14 +150,14 @@ export class MessengerService {
 
       // Check handoff: keyword detection
       if (this.handoffService.shouldHandoffByKeyword(userText)) {
-        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'customer_request');
-        await this.fbApi.sendMessage(psid, 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.', config.pageAccessToken);
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'customer_request', tenant.settings, 'messenger');
+        await this.fbApi.sendMessage(psid, resolveTenantMessage(tenant.settings, 'handoffMessage', 'messenger'), config.pageAccessToken);
         return;
       }
 
-      // Skip AI if conversation is in handoff mode (agent is handling)
+      // Skip AI if user agent is handling (assigned or handoff)
       if (await this.handoffService.isInHandoff(tenant.databaseUrl, conversation.id)) {
-        this.logger.log(`Conversation ${conversation.id} is in handoff mode, skipping AI`);
+        this.logger.log(`Conversation ${conversation.id} handled by user agent, skipping AI`);
         return;
       }
 
@@ -160,20 +181,53 @@ export class MessengerService {
       const tenantSettings = (tenant.settings as any) || {};
       const aiSettings = tenantSettings.ai || {};
 
-      const result = await this.queryEngine.query({
-        tenantId: tenant.id,
-        tenantSlug: tenant.slug,
-        tenantDatabaseUrl: tenant.databaseUrl,
-        question: userText,
-        customerId: customer.id,
-        customerMemory: memories.map((m) => ({
-          type: m.type,
-          key: m.key,
-          value: m.value,
-        })),
-        conversationHistory: history,
-        allowGeneralKnowledge: aiSettings.allowGeneralKnowledge ?? false,
-      });
+      // Check if AI is enabled for this tenant
+      const aiEnabled = aiSettings.enabled !== false;
+      if (!aiEnabled) {
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'ai_disabled', tenant.settings, 'messenger');
+        await this.fbApi.sendMessage(psid, resolveTenantMessage(tenant.settings, 'handoffMessage', 'messenger'), config.pageAccessToken);
+        return;
+      }
+
+      let result;
+      const isEcommerce = tenantSettings.ecommerce?.enabled === true;
+
+      try {
+        if (isEcommerce && this.ecommerceChatbot) {
+          const ecomResult = await this.ecommerceChatbot.chat({
+            tenantId: tenant.id,
+            tenantSlug: tenant.slug,
+            tenantDatabaseUrl: tenant.databaseUrl,
+            customerId: customer.id,
+            conversationId: conversation.id,
+            channel: 'messenger',
+            message: userText,
+            conversationMessages: history.map((m) => ({ role: m.role.toLowerCase(), content: m.content })),
+            customerMemories: memories.map((m) => ({ type: m.type, key: m.key, value: m.value })),
+          });
+          result = { answer: ecomResult.answer, confidence: ecomResult.confidence, sources: ecomResult.sources };
+        } else {
+          result = await this.queryEngine.query({
+            tenantId: tenant.id,
+            tenantSlug: tenant.slug,
+            tenantDatabaseUrl: tenant.databaseUrl,
+            question: userText,
+            customerId: customer.id,
+            customerMemory: memories.map((m) => ({
+              type: m.type,
+              key: m.key,
+              value: m.value,
+            })),
+            conversationHistory: history,
+            allowGeneralKnowledge: aiSettings.allowGeneralKnowledge ?? false,
+          });
+        }
+      } catch (aiError: any) {
+        this.logger.error(`AI query failed for conversation ${conversation.id}`, aiError);
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'ai_unavailable', tenant.settings, 'messenger');
+        await this.fbApi.sendMessage(psid, resolveTenantMessage(tenant.settings, 'aiUnavailableMessage', 'messenger'), config.pageAccessToken);
+        return;
+      }
 
       // Check handoff: low confidence
       if (this.handoffService.shouldHandoffByConfidence(result.confidence ?? 1)) {
@@ -186,8 +240,8 @@ export class MessengerService {
             metadata: { confidence: result.confidence, isSuggestion: true },
           },
         });
-        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'low_confidence');
-        await this.fbApi.sendMessage(psid, 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.', config.pageAccessToken);
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'low_confidence', tenant.settings, 'messenger');
+        await this.fbApi.sendMessage(psid, resolveTenantMessage(tenant.settings, 'handoffMessage', 'messenger'), config.pageAccessToken);
         return;
       }
 
@@ -225,6 +279,16 @@ export class MessengerService {
       // 9. Send reply to Facebook
       await this.fbApi.sendMessage(psid, plainAnswer, config.pageAccessToken);
 
+      // Trigger preference extraction every 3 messages
+      const totalMessages = recentMessages.length + 1;
+      if (totalMessages >= 3 && totalMessages % 3 === 0) {
+        const allMessages = [...recentMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'AI_ASSISTANT', content: result.answer }];
+        this.eventEmitter.emit(
+          'customer.message',
+          new CustomerMessageEvent(tenant.id, tenant.databaseUrl, customer.id, conversation.id, allMessages),
+        );
+      }
+
       this.logger.log(`Replied to ${psid}, confidence: ${result.confidence?.toFixed(2)}`);
     } catch (error) {
       this.logger.error(`Failed to process FB message from ${psid}`, error);
@@ -233,7 +297,7 @@ export class MessengerService {
       try {
         await this.fbApi.sendMessage(
           psid,
-          'Xin lỗi, hệ thống đang bận. Vui lòng thử lại sau hoặc liên hệ hotline để được hỗ trợ.',
+          resolveTenantMessage(tenant.settings, 'aiUnavailableMessage', 'messenger'),
           config.pageAccessToken,
         );
       } catch {

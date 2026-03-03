@@ -57,4 +57,10 @@ export default () => ({
     chunkOverlapTokens: parseInt(process.env.CHUNK_OVERLAP_TOKENS || '50', 10),
     maxSearchResults: parseInt(process.env.MAX_SEARCH_RESULTS || '10', 10),
   },
+  push: {
+    vapidSubject: process.env.VAPID_SUBJECT || 'mailto:admin@tino.vn',
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
+    vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || '',
+    firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
+  },
 });

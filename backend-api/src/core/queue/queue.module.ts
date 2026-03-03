@@ -32,6 +32,7 @@ import { QUEUES } from '@common/constants';
       { name: QUEUES.PREFERENCE_EXTRACTION },
       { name: QUEUES.ANALYTICS },
       { name: QUEUES.CRAWLER },
+      { name: QUEUES.NOTIFICATION },
     ),
   ],
   exports: [BullModule],

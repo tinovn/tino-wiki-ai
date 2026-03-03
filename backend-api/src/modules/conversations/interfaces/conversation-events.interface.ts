@@ -28,9 +28,18 @@ export interface ConversationHandoffPayload {
   reason: string;
 }
 
+export interface ConversationEcommercePayload {
+  tenantId: string;
+  conversationId: string;
+  customerId: string;
+  event: 'cart_updated' | 'order_created' | 'intent_detected';
+  data: Record<string, unknown>;
+}
+
 export const CONVERSATION_EVENTS = {
   NEW_MESSAGE: 'conversation.new_message',
   UPDATED: 'conversation.updated',
   CREATED: 'conversation.created',
   HANDOFF: 'conversation.handoff',
+  ECOMMERCE: 'conversation.ecommerce',
 } as const;

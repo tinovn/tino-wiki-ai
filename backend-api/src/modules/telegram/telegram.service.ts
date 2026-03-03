@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as TelegramBot from 'node-telegram-bot-api';
 import { PrismaService } from '@core/database/prisma/prisma.service';
@@ -7,6 +7,8 @@ import { QueryEngineService } from '@modules/ai/services/query-engine.service';
 import { CustomerMessageEvent } from '@core/event-bus/events/customer-message.event';
 import { HandoffService } from '@modules/conversations/services/handoff.service';
 import { CONVERSATION_EVENTS } from '@modules/conversations/interfaces/conversation-events.interface';
+import { EcommerceChatbotService } from '@modules/ecommerce-chatbot/ecommerce-chatbot.service';
+import { resolveTenantMessage } from '@common/utils';
 import { TelegramApiService } from './telegram-api.service';
 
 interface TelegramConfig {
@@ -33,6 +35,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     private readonly telegramApi: TelegramApiService,
     private readonly eventEmitter: EventEmitter2,
     private readonly handoffService: HandoffService,
+    @Optional() private readonly ecommerceChatbot?: EcommerceChatbotService,
   ) {}
 
   async onModuleInit() {
@@ -167,14 +170,31 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`Created new customer for Telegram chat ${chatId}`);
       }
 
-      // Find or create conversation
+      // Find or create conversation (always reuse existing)
       let conversation = await db.conversation.findFirst({
-        where: { customerId: customer.id, channel: 'telegram', status: 'ACTIVE' },
+        where: { customerId: customer.id, channel: 'telegram' },
         orderBy: { startedAt: 'desc' },
       });
       if (!conversation) {
         conversation = await db.conversation.create({
           data: { customerId: customer.id, channel: 'telegram' },
+        });
+        // Send welcome message for new conversations
+        const welcomeMsg = resolveTenantMessage(tenant.settings, 'welcomeMessage', 'telegram');
+        await bot.sendMessage(chatId, welcomeMsg);
+        await db.conversationMessage.create({
+          data: { conversationId: conversation.id, role: 'SYSTEM', content: welcomeMsg, metadata: { event: 'welcome' } },
+        });
+      } else if (conversation.status === 'CLOSED') {
+        conversation = await db.conversation.update({
+          where: { id: conversation.id },
+          data: { status: 'ACTIVE', endedAt: null },
+        });
+        // Send welcome back message
+        const welcomeBackMsg = resolveTenantMessage(tenant.settings, 'welcomeBackMessage', 'telegram');
+        await bot.sendMessage(chatId, welcomeBackMsg);
+        await db.conversationMessage.create({
+          data: { conversationId: conversation.id, role: 'SYSTEM', content: welcomeBackMsg, metadata: { event: 'conversation_reopened' } },
         });
       }
 
@@ -203,16 +223,27 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         message: { id: customerMsg.id, role: 'CUSTOMER', content: userText, createdAt: customerMsg.createdAt },
       });
 
-      // Check handoff: keyword detection
-      if (this.handoffService.shouldHandoffByKeyword(userText)) {
-        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'customer_request');
-        await bot.sendMessage(chatId, 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.');
+      // Check greeting: reply with welcome message, skip AI
+      if (this.handoffService.isGreeting(userText)) {
+        const greetingReply = resolveTenantMessage(tenant.settings, 'welcomeMessage', 'telegram');
+        await db.conversationMessage.create({
+          data: { conversationId: conversation.id, role: 'AI_ASSISTANT', content: greetingReply },
+        });
+        await db.conversation.update({ where: { id: conversation.id }, data: { lastMessageAt: new Date() } });
+        await bot.sendMessage(chatId, greetingReply);
         return;
       }
 
-      // Skip AI if conversation is in handoff mode
+      // Check handoff: keyword detection
+      if (this.handoffService.shouldHandoffByKeyword(userText)) {
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'customer_request', tenant.settings, 'telegram');
+        await bot.sendMessage(chatId, resolveTenantMessage(tenant.settings, 'handoffMessage', 'telegram'));
+        return;
+      }
+
+      // Skip AI if user agent is handling (assigned or handoff)
       if (await this.handoffService.isInHandoff(tenant.databaseUrl, conversation.id)) {
-        this.logger.log(`Conversation ${conversation.id} is in handoff mode, skipping AI`);
+        this.logger.log(`Conversation ${conversation.id} handled by user agent, skipping AI`);
         return;
       }
 
@@ -232,26 +263,59 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       const tenantSettings = (tenant.settings as any) || {};
       const aiSettings = tenantSettings.ai || {};
 
+      // Check if AI is enabled for this tenant
+      const aiEnabled = aiSettings.enabled !== false;
+      if (!aiEnabled) {
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'ai_disabled', tenant.settings, 'telegram');
+        await bot.sendMessage(chatId, resolveTenantMessage(tenant.settings, 'handoffMessage', 'telegram'));
+        return;
+      }
+
       // Exclude the current message from history (it's the question)
       const history = recentMessages.slice(0, -1).map((m) => ({
         role: m.role,
         content: m.content,
       }));
 
-      const result = await this.queryEngine.query({
-        tenantId: tenant.id,
-        tenantSlug: tenant.slug,
-        tenantDatabaseUrl: tenant.databaseUrl,
-        question: userText,
-        customerId: customer.id,
-        customerMemory: memories.map((m) => ({
-          type: m.type,
-          key: m.key,
-          value: m.value,
-        })),
-        conversationHistory: history,
-        allowGeneralKnowledge: aiSettings.allowGeneralKnowledge ?? false,
-      });
+      let result;
+      const isEcommerce = tenantSettings.ecommerce?.enabled === true;
+
+      try {
+        if (isEcommerce && this.ecommerceChatbot) {
+          const ecomResult = await this.ecommerceChatbot.chat({
+            tenantId: tenant.id,
+            tenantSlug: tenant.slug,
+            tenantDatabaseUrl: tenant.databaseUrl,
+            customerId: customer.id,
+            conversationId: conversation.id,
+            channel: 'telegram',
+            message: userText,
+            conversationMessages: history.map((m) => ({ role: m.role.toLowerCase(), content: m.content })),
+            customerMemories: memories.map((m) => ({ type: m.type, key: m.key, value: m.value })),
+          });
+          result = { answer: ecomResult.answer, confidence: ecomResult.confidence, sources: ecomResult.sources };
+        } else {
+          result = await this.queryEngine.query({
+            tenantId: tenant.id,
+            tenantSlug: tenant.slug,
+            tenantDatabaseUrl: tenant.databaseUrl,
+            question: userText,
+            customerId: customer.id,
+            customerMemory: memories.map((m) => ({
+              type: m.type,
+              key: m.key,
+              value: m.value,
+            })),
+            conversationHistory: history,
+            allowGeneralKnowledge: aiSettings.allowGeneralKnowledge ?? false,
+          });
+        }
+      } catch (aiError: any) {
+        this.logger.error(`AI query failed for conversation ${conversation.id}`, aiError);
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'ai_unavailable', tenant.settings, 'telegram');
+        await bot.sendMessage(chatId, resolveTenantMessage(tenant.settings, 'aiUnavailableMessage', 'telegram'));
+        return;
+      }
 
       // Check handoff: low confidence
       if (this.handoffService.shouldHandoffByConfidence(result.confidence ?? 1)) {
@@ -263,8 +327,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
             metadata: { confidence: result.confidence, isSuggestion: true },
           },
         });
-        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'low_confidence');
-        await bot.sendMessage(chatId, 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.');
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'low_confidence', tenant.settings, 'telegram');
+        await bot.sendMessage(chatId, resolveTenantMessage(tenant.settings, 'handoffMessage', 'telegram'));
         return;
       }
 
@@ -319,13 +383,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     } catch (error: any) {
       this.logger.error(`Failed to process Telegram message from chat ${chatId}`, error);
 
-      const isConnectionError = error.message?.includes('Connection error') || error.message?.includes('ECONNREFUSED');
-      const errorMsg = isConnectionError
-        ? 'Hệ thống AI đang khởi động lại, vui lòng thử lại sau 1-2 phút.'
-        : 'Xin lỗi, hệ thống đang bận. Vui lòng thử lại sau hoặc liên hệ hotline để được hỗ trợ.';
-
       try {
-        await bot.sendMessage(chatId, errorMsg);
+        await bot.sendMessage(chatId, resolveTenantMessage(tenant.settings, 'aiUnavailableMessage', 'telegram'));
       } catch {
         // ignore
       }

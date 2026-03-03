@@ -103,3 +103,33 @@ export function useBulkDelete() {
     onSuccess: () => qc.invalidateQueries({ queryKey: [QUERY_KEYS.DOCUMENTS] }),
   });
 }
+
+export function useBulkReprocess() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (force: boolean) => documentsService.bulkReprocess(force),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [QUERY_KEYS.DOCUMENTS] });
+      qc.invalidateQueries({ queryKey: ['indexing-stats'] });
+    },
+  });
+}
+
+export function useReprocessDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => documentsService.reprocess(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [QUERY_KEYS.DOCUMENTS] });
+      qc.invalidateQueries({ queryKey: ['indexing-stats'] });
+    },
+  });
+}
+
+export function useIndexingStats() {
+  return useQuery({
+    queryKey: ['indexing-stats'],
+    queryFn: () => documentsService.getIndexingStats(),
+    refetchInterval: 30_000, // refresh every 30s
+  });
+}

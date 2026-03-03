@@ -1,16 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaClientManager } from '@core/database/prisma/prisma-client.manager';
+import { resolveTenantMessage } from '@common/utils';
 import {
   CONVERSATION_EVENTS,
   ConversationHandoffPayload,
   ConversationNewMessagePayload,
+  ConversationUpdatedPayload,
 } from '../interfaces/conversation-events.interface';
 
 const HANDOFF_KEYWORDS = [
   'nhân viên', 'nhan vien', 'tư vấn viên', 'tu van vien',
   'người thật', 'nguoi that', 'agent', 'human', 'operator',
   'nói chuyện với người', 'gặp người', 'hỗ trợ trực tiếp',
+];
+
+const GREETING_PATTERNS = [
+  'hello', 'hi', 'hey', 'alo', 'alô', 'xin chào', 'chào',
+  'chào bạn', 'chao ban', 'good morning', 'good afternoon',
+  'good evening', 'yo', 'helu', 'helo', 'hallo',
 ];
 
 @Injectable()
@@ -21,6 +29,14 @@ export class HandoffService {
     private readonly clientManager: PrismaClientManager,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  /**
+   * Check if message is a simple greeting (skip AI query).
+   */
+  isGreeting(message: string): boolean {
+    const trimmed = message.trim().toLowerCase().replace(/[!?.,:;]+$/g, '');
+    return GREETING_PATTERNS.some((g) => trimmed === g || trimmed === g + ' ạ' || trimmed === g + ' a');
+  }
 
   /**
    * Check if a customer message should trigger handoff.
@@ -46,6 +62,8 @@ export class HandoffService {
     conversationId: string,
     customerId: string,
     reason: string,
+    tenantSettings?: Record<string, any>,
+    channel?: string,
   ): Promise<void> {
     const db = await this.clientManager.getClient(tenantDatabaseUrl);
 
@@ -61,11 +79,12 @@ export class HandoffService {
     });
 
     // Add system message
+    const handoffMsg = resolveTenantMessage(tenantSettings, 'handoffMessage', channel);
     const systemMessage = await db.conversationMessage.create({
       data: {
         conversationId,
         role: 'SYSTEM',
-        content: 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.',
+        content: handoffMsg,
         metadata: { handoffReason: reason },
       },
     });
@@ -103,14 +122,93 @@ export class HandoffService {
   }
 
   /**
-   * Check if a conversation is currently in handoff mode (agent should handle).
+   * Check if AI should be skipped for this conversation.
+   * Returns true if:
+   * - isHandoff = true (explicitly handed off to human)
+   * - assignedAgentId is set (user agent has claimed this conversation)
    */
   async isInHandoff(tenantDatabaseUrl: string, conversationId: string): Promise<boolean> {
     const db = await this.clientManager.getClient(tenantDatabaseUrl);
     const conv = await db.conversation.findUnique({
       where: { id: conversationId },
-      select: { isHandoff: true },
+      select: { isHandoff: true, assignedAgentId: true },
     });
-    return conv?.isHandoff ?? false;
+    if (!conv) return false;
+    return conv.isHandoff || !!conv.assignedAgentId;
+  }
+
+  /**
+   * Cancel handoff — return conversation to AI handling.
+   */
+  async cancelHandoff(
+    tenantId: string,
+    tenantDatabaseUrl: string,
+    conversationId: string,
+    customerId: string,
+    tenantSettings?: Record<string, any>,
+    channel?: string,
+  ): Promise<void> {
+    const db = await this.clientManager.getClient(tenantDatabaseUrl);
+
+    const conv = await db.conversation.findUnique({
+      where: { id: conversationId },
+      select: { isHandoff: true, assignedAgentId: true },
+    });
+    if (!conv?.isHandoff && !conv?.assignedAgentId) return;
+
+    await db.conversation.update({
+      where: { id: conversationId },
+      data: { isHandoff: false, handoffReason: null, assignedAgentId: null },
+    });
+
+    const resumeMsg = resolveTenantMessage(tenantSettings, 'resumeAiMessage', channel);
+    const systemMessage = await db.conversationMessage.create({
+      data: {
+        conversationId,
+        role: 'SYSTEM',
+        content: resumeMsg,
+        metadata: { event: 'handoff_cancelled' },
+      },
+    });
+
+    await db.conversation.update({
+      where: { id: conversationId },
+      data: { lastMessageAt: systemMessage.createdAt },
+    });
+
+    this.eventEmitter.emit(CONVERSATION_EVENTS.UPDATED, {
+      tenantId,
+      conversationId,
+      changes: { isHandoff: false, handoffReason: null, assignedAgentId: null },
+    } satisfies ConversationUpdatedPayload);
+
+    this.eventEmitter.emit(CONVERSATION_EVENTS.NEW_MESSAGE, {
+      tenantId,
+      tenantDatabaseUrl,
+      conversationId,
+      customerId,
+      message: {
+        id: systemMessage.id,
+        role: 'SYSTEM',
+        content: systemMessage.content,
+        createdAt: systemMessage.createdAt,
+      },
+    } satisfies ConversationNewMessagePayload);
+
+    this.logger.log(`Handoff cancelled for conversation ${conversationId}`);
+  }
+
+  /**
+   * Alias: resume AI handling for a conversation.
+   */
+  async resumeAi(
+    tenantId: string,
+    tenantDatabaseUrl: string,
+    conversationId: string,
+    customerId: string,
+    tenantSettings?: Record<string, any>,
+    channel?: string,
+  ): Promise<void> {
+    return this.cancelHandoff(tenantId, tenantDatabaseUrl, conversationId, customerId, tenantSettings, channel);
   }
 }

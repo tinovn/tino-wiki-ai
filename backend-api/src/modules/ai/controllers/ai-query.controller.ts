@@ -7,6 +7,7 @@ import { AiQueryDto } from '../dto/ai-query.dto';
 import { ApiResponseDto } from '@common/dto';
 import { PrismaService } from '@core/database/prisma/prisma.service';
 import { Roles } from '@common/decorators';
+import { DEFAULT_MESSAGES, TenantMessageKey } from '@common/utils';
 
 @ApiTags('AI')
 @ApiBearerAuth()
@@ -117,6 +118,60 @@ export class AiQueryController {
     });
 
     return ApiResponseDto.success({ widgetToken });
+  }
+
+  @Get('messages')
+  @Roles('ADMIN')
+  async getMessages(@Req() req: any) {
+    const settings = req.tenant?.settings || {};
+    return ApiResponseDto.success({
+      global: settings.messages || {},
+      messenger: settings.messenger?.messages || {},
+      telegram: settings.telegram?.messages || {},
+      chatwidget: settings.chatwidget?.messages || {},
+      defaults: DEFAULT_MESSAGES,
+    });
+  }
+
+  @Patch('messages')
+  @Roles('ADMIN')
+  async updateMessages(
+    @Body() body: {
+      global?: Partial<Record<TenantMessageKey, string>>;
+      messenger?: Partial<Record<TenantMessageKey, string>>;
+      telegram?: Partial<Record<TenantMessageKey, string>>;
+      chatwidget?: Partial<Record<TenantMessageKey, string>>;
+    },
+    @Req() req: any,
+  ) {
+    const tenantId = req.tenant?.id;
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    const currentSettings = (typeof tenant!.settings === 'string'
+      ? JSON.parse(tenant!.settings)
+      : tenant!.settings) || {};
+
+    if (body.global) {
+      currentSettings.messages = { ...currentSettings.messages, ...body.global };
+    }
+
+    for (const ch of ['messenger', 'telegram', 'chatwidget'] as const) {
+      if (body[ch]) {
+        currentSettings[ch] = currentSettings[ch] || {};
+        currentSettings[ch].messages = { ...currentSettings[ch]?.messages, ...body[ch] };
+      }
+    }
+
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { settings: currentSettings },
+    });
+
+    return ApiResponseDto.success({
+      global: currentSettings.messages || {},
+      messenger: currentSettings.messenger?.messages || {},
+      telegram: currentSettings.telegram?.messages || {},
+      chatwidget: currentSettings.chatwidget?.messages || {},
+    });
   }
 
   @Post('query')

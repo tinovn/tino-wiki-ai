@@ -94,6 +94,17 @@ export class VectorStoreService {
     });
   }
 
+  async getCollectionStats(tenantSlug: string): Promise<{ pointsCount: number }> {
+    const collectionName = this.collectionManager.getCollectionName(tenantSlug);
+    const client = this.qdrant.getClient();
+    try {
+      const info = await client.getCollection(collectionName);
+      return { pointsCount: info.points_count ?? 0 };
+    } catch {
+      return { pointsCount: 0 };
+    }
+  }
+
   private buildFilter(filter: Record<string, any>): any[] {
     return Object.entries(filter).map(([key, value]) => ({
       key,

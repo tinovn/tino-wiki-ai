@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleDestroy } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -13,11 +13,14 @@ import { Server, Socket } from 'socket.io';
 import * as jwt from 'jsonwebtoken';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClientManager } from '@core/database/prisma/prisma-client.manager';
+import { RedisService } from '@core/redis/redis.service';
+import { PresenceService } from '../services/presence.service';
 import {
   CONVERSATION_EVENTS,
   ConversationNewMessagePayload,
   ConversationUpdatedPayload,
   ConversationHandoffPayload,
+  ConversationEcommercePayload,
 } from '../interfaces/conversation-events.interface';
 
 interface AuthenticatedSocket extends Socket {
@@ -29,6 +32,13 @@ interface AuthenticatedSocket extends Socket {
   };
 }
 
+// Rate limit: actions per 60-second window
+const RATE_LIMITS: Record<string, number> = {
+  typing: 30,
+  mark_read: 60,
+  join_conversation: 30,
+};
+
 @WebSocketGateway({
   namespace: '/ws/conversations',
   cors: {
@@ -36,7 +46,9 @@ interface AuthenticatedSocket extends Socket {
     credentials: true,
   },
 })
-export class ConversationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ConversationsGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
+{
   @WebSocketServer()
   server: Server;
 
@@ -45,6 +57,8 @@ export class ConversationsGateway implements OnGatewayConnection, OnGatewayDisco
   constructor(
     private readonly configService: ConfigService,
     private readonly clientManager: PrismaClientManager,
+    private readonly presenceService: PresenceService,
+    private readonly redis: RedisService,
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -56,17 +70,37 @@ export class ConversationsGateway implements OnGatewayConnection, OnGatewayDisco
 
       if (!token || !tenantId) {
         this.logger.warn('WebSocket connection rejected: missing token or tenantId');
-        client.disconnect();
+        client.emit('error', { message: 'Missing authentication token or tenantId' });
+        client.disconnect(true);
         return;
       }
 
       // Verify JWT
-      const secret = this.configService.get<string>('JWT_SECRET') || 'jwt-secret';
-      const payload = jwt.verify(token, secret) as { sub: string; tenantId: string; displayName?: string };
+      const secret = this.configService.get<string>('jwt.secret') || 'change-me';
+      let payload: { sub: string; tenantId: string; displayName?: string };
+      try {
+        payload = jwt.verify(token, secret) as { sub: string; tenantId: string; displayName?: string };
+      } catch (jwtError: any) {
+        this.logger.warn(`WebSocket JWT verification failed: ${jwtError.message}`);
+        client.emit('error', { message: 'Invalid or expired token', code: 'TOKEN_EXPIRED' });
+        client.disconnect(true);
+        return;
+      }
 
       if (payload.tenantId !== tenantId) {
         this.logger.warn('WebSocket connection rejected: tenantId mismatch');
-        client.disconnect();
+        client.emit('error', { message: 'Tenant ID mismatch' });
+        client.disconnect(true);
+        return;
+      }
+
+      // Check per-tenant connection limit
+      const connectionCount = await this.presenceService.getConnectionCount(tenantId);
+      const maxConnections = this.presenceService.getMaxConnectionsPerTenant();
+      if (connectionCount >= maxConnections) {
+        this.logger.warn(`Tenant ${tenantId} reached connection limit (${maxConnections})`);
+        client.emit('error', { message: 'Connection limit reached', code: 'CONN_LIMIT' });
+        client.disconnect(true);
         return;
       }
 
@@ -80,24 +114,78 @@ export class ConversationsGateway implements OnGatewayConnection, OnGatewayDisco
       // Join tenant room
       await client.join(`tenant:${tenantId}`);
 
+      // Track presence
+      await this.presenceService.trackConnection(
+        tenantId,
+        payload.sub,
+        client.id,
+        payload.displayName,
+      );
+
+      // Notify others in tenant
+      client.to(`tenant:${tenantId}`).emit('agent_online', {
+        userId: payload.sub,
+        displayName: payload.displayName,
+      });
+
       this.logger.log(`Agent ${payload.sub} connected to tenant:${tenantId}`);
     } catch (error: any) {
       this.logger.warn(`WebSocket auth failed: ${error.message}`);
-      client.disconnect();
+      client.emit('error', { message: 'Authentication failed' });
+      client.disconnect(true);
     }
   }
 
-  handleDisconnect(client: AuthenticatedSocket) {
+  async handleDisconnect(client: AuthenticatedSocket) {
     if (client.data?.userId) {
-      this.logger.log(`Agent ${client.data.userId} disconnected`);
+      const { userId, tenantId, displayName } = client.data;
+
+      await this.presenceService.trackDisconnection(tenantId, userId, client.id);
+
+      // Notify others in tenant
+      this.server.to(`tenant:${tenantId}`).emit('agent_offline', {
+        userId,
+        displayName,
+      });
+
+      this.logger.log(`Agent ${userId} disconnected from tenant:${tenantId}`);
     }
   }
+
+  async onModuleDestroy() {
+    if (this.server) {
+      this.server.disconnectSockets(true);
+      this.logger.log('All WebSocket connections closed (graceful shutdown)');
+    }
+  }
+
+  // --- Rate limiting helper ---
+
+  private async checkRateLimit(
+    tenantId: string,
+    userId: string,
+    action: string,
+  ): Promise<boolean> {
+    const limit = RATE_LIMITS[action];
+    if (!limit) return true;
+
+    const key = `ws:rate:${tenantId}:${userId}:${action}`;
+    const client = this.redis.getClient();
+    const count = await client.incr(key);
+    if (count === 1) await client.expire(key, 60);
+    return count <= limit;
+  }
+
+  // --- Client message handlers ---
 
   @SubscribeMessage('join_conversation')
   async handleJoinConversation(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { conversationId: string },
   ) {
+    if (!(await this.checkRateLimit(client.data.tenantId, client.data.userId, 'join_conversation'))) {
+      return;
+    }
     await client.join(`conversation:${data.conversationId}`);
     this.logger.debug(`Agent ${client.data.userId} joined conversation:${data.conversationId}`);
   }
@@ -111,10 +199,13 @@ export class ConversationsGateway implements OnGatewayConnection, OnGatewayDisco
   }
 
   @SubscribeMessage('typing')
-  handleTyping(
+  async handleTyping(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { conversationId: string; isTyping: boolean },
   ) {
+    if (!(await this.checkRateLimit(client.data.tenantId, client.data.userId, 'typing'))) {
+      return;
+    }
     // Broadcast typing to others in the conversation room
     client.to(`conversation:${data.conversationId}`).emit('typing', {
       userId: client.data.userId,
@@ -129,6 +220,9 @@ export class ConversationsGateway implements OnGatewayConnection, OnGatewayDisco
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { conversationId: string; tenantDatabaseUrl: string },
   ) {
+    if (!(await this.checkRateLimit(client.data.tenantId, client.data.userId, 'mark_read'))) {
+      return;
+    }
     try {
       const db = await this.clientManager.getClient(data.tenantDatabaseUrl);
       await db.conversation.update({
@@ -140,7 +234,13 @@ export class ConversationsGateway implements OnGatewayConnection, OnGatewayDisco
     }
   }
 
-  // --- Event listeners ---
+  @SubscribeMessage('get_online_agents')
+  async handleGetOnlineAgents(@ConnectedSocket() client: AuthenticatedSocket) {
+    const agents = await this.presenceService.getOnlineAgents(client.data.tenantId);
+    return { event: 'online_agents', data: agents };
+  }
+
+  // --- Event listeners (EventEmitter2 -> Socket.IO broadcast via Redis adapter) ---
 
   @OnEvent(CONVERSATION_EVENTS.NEW_MESSAGE)
   handleNewMessage(payload: ConversationNewMessagePayload) {
@@ -162,5 +262,12 @@ export class ConversationsGateway implements OnGatewayConnection, OnGatewayDisco
   @OnEvent(CONVERSATION_EVENTS.HANDOFF)
   handleHandoff(payload: ConversationHandoffPayload) {
     this.server.to(`tenant:${payload.tenantId}`).emit('conversation_handoff', payload);
+  }
+
+  @OnEvent(CONVERSATION_EVENTS.ECOMMERCE)
+  handleEcommerceEvent(payload: ConversationEcommercePayload) {
+    // Broadcast ecommerce events (cart_updated, order_created, intent_detected) to conversation room
+    this.server.to(`conversation:${payload.conversationId}`).emit('ecommerce_event', payload);
+    this.server.to(`tenant:${payload.tenantId}`).emit('ecommerce_event', payload);
   }
 }

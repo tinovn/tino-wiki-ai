@@ -92,6 +92,14 @@ export function useAiSuggestion() {
   });
 }
 
+export function useRelatedConversations(id: string | null) {
+  return useQuery({
+    queryKey: ['related-conversations', id],
+    queryFn: () => conversationsService.getRelated(id!),
+    enabled: !!id,
+  });
+}
+
 export function useConversationNotes(id: string | null) {
   return useQuery({
     queryKey: [NOTES_KEY, id],

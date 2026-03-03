@@ -46,6 +46,24 @@ export class DocumentController {
     return ApiResponseDto.success({ succeeded, failed: ids.length - succeeded, total: ids.length });
   }
 
+  @Get('stats/indexing')
+  @Roles('ADMIN')
+  async getIndexingStats(@Req() req: any) {
+    const stats = await this.documentService.getIndexingStats(req.tenant?.id, req.tenant?.databaseUrl);
+    return ApiResponseDto.success(stats);
+  }
+
+  @Post('bulk/reprocess')
+  @Roles('ADMIN')
+  async bulkReprocess(@Query('force') force: string, @Req() req: any) {
+    const result = await this.documentService.reprocessAll(
+      req.tenant?.id,
+      req.tenant?.databaseUrl,
+      force === 'true',
+    );
+    return ApiResponseDto.success(result);
+  }
+
   @Post('bulk/delete')
   @Roles('ADMIN', 'EDITOR')
   async bulkDelete(@Body('ids') ids: string[], @Req() req: any) {
@@ -104,6 +122,13 @@ export class DocumentController {
   async getVersion(@Param('id') id: string, @Param('version') version: number) {
     const v = await this.documentService.getVersion(id, version);
     return ApiResponseDto.success(v);
+  }
+
+  @Post(':id/reprocess')
+  @Roles('ADMIN')
+  async reprocess(@Param('id') id: string, @Req() req: any) {
+    const result = await this.documentService.reprocessOne(id, req.tenant?.id, req.tenant?.databaseUrl);
+    return ApiResponseDto.success(result);
   }
 
   @Post(':id/rollback')

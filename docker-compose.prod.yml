@@ -91,7 +91,7 @@ services:
       --model ${VLLM_MODEL:-Qwen/Qwen2.5-72B-Instruct-GPTQ-Int4}
       --tensor-parallel-size 2
       --gpu-memory-utilization 0.90
-      --max-model-len 8192
+      --max-model-len 16384
       --trust-remote-code
       --quantization gptq
       --dtype float16
@@ -105,7 +105,7 @@ services:
     volumes:
       - ./data/huggingface:/root/.cache/huggingface
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -129,8 +129,8 @@ services:
       PORT: 8001
     volumes:
       - ./data/models:/app/models
-    expose:
-      - "8001"
+    ports:
+      - "8001:8001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s

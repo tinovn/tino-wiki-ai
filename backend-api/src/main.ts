@@ -6,6 +6,13 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
+
+  // Attach Redis Socket.IO adapter for horizontal scaling
+  const { RedisIoAdapter } = await import('./core/websocket/redis-io.adapter');
+  const redisIoAdapter = new RedisIoAdapter(app);
+  await redisIoAdapter.connectToRedis(app);
+  app.useWebSocketAdapter(redisIoAdapter);
+
   const configService = app.get(ConfigService);
 
   // Global prefix

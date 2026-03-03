@@ -96,18 +96,22 @@ export class ConversationsController {
   @Post(':id/close')
   async close(
     @Param('id') id: string,
-    @CurrentTenant('id') tenantId: string,
+    @CurrentTenant() tenant: any,
   ) {
-    const conv = await this.conversationsService.closeConversation(id, tenantId);
+    const conv = await this.conversationsService.closeConversation(id, {
+      id: tenant.id, databaseUrl: tenant.databaseUrl, settings: tenant.settings,
+    });
     return ApiResponseDto.success(conv);
   }
 
   @Post(':id/reopen')
   async reopen(
     @Param('id') id: string,
-    @CurrentTenant('id') tenantId: string,
+    @CurrentTenant() tenant: any,
   ) {
-    const conv = await this.conversationsService.reopenConversation(id, tenantId);
+    const conv = await this.conversationsService.reopenConversation(id, {
+      id: tenant.id, databaseUrl: tenant.databaseUrl, settings: tenant.settings,
+    });
     return ApiResponseDto.success(conv);
   }
 
@@ -115,6 +119,19 @@ export class ConversationsController {
   async markRead(@Param('id') id: string) {
     await this.conversationsService.markAsRead(id);
     return ApiResponseDto.success({ read: true });
+  }
+
+  @Post(':id/resume-ai')
+  async resumeAi(
+    @Param('id') id: string,
+    @CurrentTenant() tenant: any,
+  ) {
+    const conv = await this.conversationsService.resumeAi(id, {
+      id: tenant.id,
+      slug: tenant.slug,
+      databaseUrl: tenant.databaseUrl,
+    });
+    return ApiResponseDto.success(conv);
   }
 
   @Post(':id/ai-suggest')
@@ -126,8 +143,29 @@ export class ConversationsController {
       id: tenant.id,
       slug: tenant.slug,
       databaseUrl: tenant.databaseUrl,
+      settings: tenant.settings,
     });
     return ApiResponseDto.success(result);
+  }
+
+  @Get(':id/ecommerce-context')
+  async getEcommerceContext(
+    @Param('id') id: string,
+    @CurrentTenant() tenant: any,
+  ) {
+    const context = await this.conversationsService.getEcommerceContext(id, {
+      id: tenant.id,
+      slug: tenant.slug,
+      databaseUrl: tenant.databaseUrl,
+      settings: tenant.settings,
+    });
+    return ApiResponseDto.success(context);
+  }
+
+  @Get(':id/related')
+  async findRelated(@Param('id') id: string) {
+    const conversations = await this.conversationsService.getCustomerConversations(id);
+    return ApiResponseDto.success(conversations);
   }
 
   @Get(':id/notes')
