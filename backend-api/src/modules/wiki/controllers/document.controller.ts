@@ -26,6 +26,36 @@ export class DocumentController {
     return ApiResponseDto.paginated(data, total, query.page!, query.limit!);
   }
 
+  @Post('bulk/publish')
+  @Roles('ADMIN', 'EDITOR')
+  async bulkPublish(@Body('ids') ids: string[], @Req() req: any) {
+    const results = await Promise.allSettled(
+      ids.map((id) => this.documentService.publish(id, req.tenant?.id, req.tenant?.databaseUrl)),
+    );
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    return ApiResponseDto.success({ succeeded, failed: ids.length - succeeded, total: ids.length });
+  }
+
+  @Post('bulk/unpublish')
+  @Roles('ADMIN', 'EDITOR')
+  async bulkUnpublish(@Body('ids') ids: string[], @Req() req: any) {
+    const results = await Promise.allSettled(
+      ids.map((id) => this.documentService.unpublish(id, req.tenant?.slug)),
+    );
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    return ApiResponseDto.success({ succeeded, failed: ids.length - succeeded, total: ids.length });
+  }
+
+  @Post('bulk/delete')
+  @Roles('ADMIN', 'EDITOR')
+  async bulkDelete(@Body('ids') ids: string[], @Req() req: any) {
+    const results = await Promise.allSettled(
+      ids.map((id) => this.documentService.softDelete(id, req.tenant?.slug)),
+    );
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    return ApiResponseDto.success({ succeeded, failed: ids.length - succeeded, total: ids.length });
+  }
+
   @Get(':id')
   async findById(@Param('id') id: string) {
     const doc = await this.documentService.findById(id);

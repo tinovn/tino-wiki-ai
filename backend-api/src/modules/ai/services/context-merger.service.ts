@@ -14,13 +14,20 @@ export class ContextMergerService {
   ): MergedSearchResult[] {
     const boostScores = AI_CONSTANTS.SCORE_BOOST;
 
-    // Apply score boosting per layer
+    // Apply score boosting per layer + priority
+    const applyPriorityBoost = (score: number, priority?: number): number => {
+      // priority 10 → 1.25x, priority 5 → 1.0x, priority 1 → 0.8x
+      const p = priority ?? 5;
+      const multiplier = 1 + (p - 5) * 0.05;
+      return score * multiplier;
+    };
+
     const boosted: MergedSearchResult[] = [
       ...customerResults.map((r) => ({
         documentId: r.payload.documentId,
         chunkContent: r.payload.content,
         heading: r.payload.heading,
-        score: r.score * boostScores.CUSTOMER,
+        score: applyPriorityBoost(r.score * boostScores.CUSTOMER, r.payload.priority),
         layer: 'customer',
         intents: r.payload.intents,
       })),
@@ -28,7 +35,7 @@ export class ContextMergerService {
         documentId: r.payload.documentId,
         chunkContent: r.payload.content,
         heading: r.payload.heading,
-        score: r.score * boostScores.TENANT,
+        score: applyPriorityBoost(r.score * boostScores.TENANT, r.payload.priority),
         layer: 'tenant',
         intents: r.payload.intents,
       })),
@@ -36,7 +43,7 @@ export class ContextMergerService {
         documentId: r.payload.documentId,
         chunkContent: r.payload.content,
         heading: r.payload.heading,
-        score: r.score * boostScores.MASTER,
+        score: applyPriorityBoost(r.score * boostScores.MASTER, r.payload.priority),
         layer: 'master',
         intents: r.payload.intents,
       })),

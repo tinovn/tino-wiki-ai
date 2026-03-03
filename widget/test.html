@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tino Widget Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; }
+
+    .hero {
+      background: linear-gradient(135deg, #1890ff 0%, #722ed1 100%);
+      color: #fff;
+      padding: 80px 24px 60px;
+      text-align: center;
+    }
+    .hero h1 { font-size: 36px; margin-bottom: 12px; }
+    .hero p { font-size: 18px; opacity: 0.9; max-width: 600px; margin: 0 auto; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      padding: 48px 0;
+    }
+    .feature-card {
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 12px;
+      padding: 24px;
+      transition: box-shadow 0.2s;
+    }
+    .feature-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    .feature-card h3 { font-size: 18px; margin-bottom: 8px; color: #1890ff; }
+    .feature-card p { color: #666; line-height: 1.6; font-size: 14px; }
+
+    .pricing {
+      background: #f7f8fa;
+      padding: 48px 0;
+    }
+    .pricing h2 { text-align: center; font-size: 28px; margin-bottom: 32px; }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .price-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px;
+      text-align: center;
+      border: 1px solid #e8e8e8;
+    }
+    .price-card.featured { border-color: #1890ff; box-shadow: 0 4px 20px rgba(24,144,255,0.15); }
+    .price-card h3 { font-size: 20px; margin-bottom: 8px; }
+    .price-card .price { font-size: 32px; font-weight: 700; color: #1890ff; margin: 12px 0; }
+    .price-card .price span { font-size: 14px; color: #999; font-weight: normal; }
+    .price-card ul { list-style: none; text-align: left; margin: 16px 0; }
+    .price-card li { padding: 6px 0; font-size: 14px; color: #666; }
+    .price-card li::before { content: "✓ "; color: #52c41a; font-weight: bold; }
+
+    .faq { padding: 48px 0; }
+    .faq h2 { text-align: center; font-size: 28px; margin-bottom: 32px; }
+    .faq-item { border-bottom: 1px solid #e8e8e8; padding: 16px 0; }
+    .faq-item h4 { font-size: 16px; margin-bottom: 8px; }
+    .faq-item p { color: #666; line-height: 1.6; font-size: 14px; }
+
+    footer {
+      background: #1a1a2e;
+      color: #aaa;
+      text-align: center;
+      padding: 24px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Tino Wiki CRM</h1>
+    <p>Hệ thống AI Knowledge Base giúp doanh nghiệp tự động hóa hỗ trợ khách hàng, đào tạo nhân sự và quản lý tri thức nội bộ.</p>
+  </section>
+
+  <!-- Features -->
+  <section class="container">
+    <div class="features">
+      <div class="feature-card">
+        <h3>Wiki nội bộ</h3>
+        <p>Quản lý tài liệu, quy trình, hướng dẫn nội bộ dễ dàng. Hỗ trợ Markdown, phân loại theo danh mục và tag.</p>
+      </div>
+      <div class="feature-card">
+        <h3>AI RAG Engine</h3>
+        <p>Hệ thống RAG 3 lớp: Customer → Tenant → Master. Trả lời chính xác dựa trên tài liệu của bạn.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Đa kênh tích hợp</h3>
+        <p>Kết nối Telegram, Facebook Messenger, Chat Widget. Một nền tảng AI phục vụ mọi kênh.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Phân tích thông minh</h3>
+        <p>Dashboard phân tích câu hỏi, phát hiện content gap, đo confidence, theo dõi xu hướng.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Multi-tenant</h3>
+        <p>Database-per-tenant isolation. Mỗi doanh nghiệp có hệ thống riêng biệt, bảo mật tuyệt đối.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Chat Widget</h3>
+        <p>Gắn widget AI chat lên website chỉ với 1 dòng code. Tùy chỉnh màu sắc, vị trí, lời chào.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="pricing">
+    <div class="container">
+      <h2>Bảng giá</h2>
+      <div class="pricing-grid">
+        <div class="price-card">
+          <h3>Free</h3>
+          <div class="price">0đ <span>/tháng</span></div>
+          <ul>
+            <li>100 tài liệu</li>
+            <li>1,000 câu hỏi/tháng</li>
+            <li>1 kênh chat</li>
+            <li>AI cơ bản</li>
+          </ul>
+        </div>
+        <div class="price-card featured">
+          <h3>Professional</h3>
+          <div class="price">999K <span>/tháng</span></div>
+          <ul>
+            <li>Không giới hạn tài liệu</li>
+            <li>50,000 câu hỏi/tháng</li>
+            <li>Tất cả kênh chat</li>
+            <li>AI nâng cao + Streaming</li>
+            <li>Phân tích & báo cáo</li>
+          </ul>
+        </div>
+        <div class="price-card">
+          <h3>Enterprise</h3>
+          <div class="price">Liên hệ</div>
+          <ul>
+            <li>Triển khai riêng (On-premise)</li>
+            <li>Custom LLM model</li>
+            <li>SLA 99.9%</li>
+            <li>Hỗ trợ 24/7</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="faq">
+    <div class="container">
+      <h2>Câu hỏi thường gặp</h2>
+      <div class="faq-item">
+        <h4>Tino Wiki CRM là gì?</h4>
+        <p>Tino Wiki CRM là nền tảng SaaS kết hợp Wiki nội bộ với AI RAG Engine, giúp doanh nghiệp tự động hóa hỗ trợ khách hàng dựa trên knowledge base.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Làm sao để tích hợp Chat Widget?</h4>
+        <p>Chỉ cần copy đoạn embed code từ trang Channels trong admin panel và dán vào website của bạn. Widget sẽ tự động hiển thị.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Dữ liệu có an toàn không?</h4>
+        <p>Mỗi tenant có database riêng biệt (database-per-tenant). Dữ liệu được mã hóa và không bao giờ bị chia sẻ giữa các tổ chức.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Có hỗ trợ tiếng Việt không?</h4>
+        <p>Hoàn toàn hỗ trợ tiếng Việt. AI được tối ưu để hiểu và trả lời bằng tiếng Việt chính xác.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p>&copy; 2026 Tino Wiki CRM. Demo page for testing Chat Widget integration.</p>
+  </footer>
+
+  <!-- Tino Chat Widget -->
+  <script src="./dist/widget.js" data-token="wt_62bda6d1133cd69e0baabe8fbf3b594cb185f3a8f92fd2d1" data-api="http://localhost:3000/api/v1"></script>
+
+</body>
+</html>

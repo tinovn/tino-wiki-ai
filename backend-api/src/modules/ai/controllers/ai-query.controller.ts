@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Patch, Body, Req, Res } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
+import * as crypto from 'crypto';
 import { QueryEngineService } from '../services/query-engine.service';
 import { AiQueryDto } from '../dto/ai-query.dto';
 import { ApiResponseDto } from '@common/dto';
@@ -55,12 +56,16 @@ export class AiQueryController {
     return ApiResponseDto.success({
       messenger: settings.messenger || null,
       telegram: settings.telegram || null,
+      chatwidget: settings.chatwidget || null,
     });
   }
 
   @Patch('channels')
   @Roles('ADMIN')
-  async updateChannels(@Body() body: { messenger?: any; telegram?: any }, @Req() req: any) {
+  async updateChannels(
+    @Body() body: { messenger?: any; telegram?: any; chatwidget?: any },
+    @Req() req: any,
+  ) {
     const tenantId = req.tenant?.id;
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     const currentSettings = (typeof tenant!.settings === 'string'
@@ -73,6 +78,9 @@ export class AiQueryController {
     if (body.telegram !== undefined) {
       currentSettings.telegram = body.telegram;
     }
+    if (body.chatwidget !== undefined) {
+      currentSettings.chatwidget = body.chatwidget;
+    }
 
     await this.prisma.tenant.update({
       where: { id: tenantId },
@@ -82,7 +90,33 @@ export class AiQueryController {
     return ApiResponseDto.success({
       messenger: currentSettings.messenger || null,
       telegram: currentSettings.telegram || null,
+      chatwidget: currentSettings.chatwidget || null,
     });
+  }
+
+  @Post('channels/chatwidget/generate-token')
+  @Roles('ADMIN')
+  async generateWidgetToken(@Req() req: any) {
+    const tenantId = req.tenant?.id;
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    const currentSettings = (typeof tenant!.settings === 'string'
+      ? JSON.parse(tenant!.settings)
+      : tenant!.settings) || {};
+
+    const widgetToken = 'wt_' + crypto.randomBytes(24).toString('hex');
+
+    currentSettings.chatwidget = {
+      ...currentSettings.chatwidget,
+      widgetToken,
+      enabled: currentSettings.chatwidget?.enabled ?? true,
+    };
+
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { settings: currentSettings },
+    });
+
+    return ApiResponseDto.success({ widgetToken });
   }
 
   @Post('query')

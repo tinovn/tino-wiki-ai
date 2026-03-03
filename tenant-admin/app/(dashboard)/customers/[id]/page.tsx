@@ -101,7 +101,7 @@ export default function CustomerDetailPage() {
             <List.Item>
               <List.Item.Meta
                 title={`${item.channel} - ${item.status}`}
-                description={new Date(item.createdAt).toLocaleString()}
+                description={new Date(item.startedAt).toLocaleString()}
               />
               <Tag color={item.status === 'OPEN' ? 'green' : 'default'}>{item.status}</Tag>
             </List.Item>

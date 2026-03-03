@@ -1,59 +1,53 @@
-import { Controller, Post, Body, Param, Req, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Param, Logger } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { ConfigService } from '@nestjs/config';
-import { Public } from '@common/decorators';
+import { MasterRoles } from '@common/decorators';
 import { TelegramService } from './telegram.service';
-import { TelegramUpdate } from './dto/telegram-webhook.dto';
 
-@ApiTags('Telegram Webhook')
-@Controller('webhooks/telegram')
+@ApiTags('Telegram Bot')
+@Controller('telegram')
 export class TelegramController {
   private readonly logger = new Logger(TelegramController.name);
 
-  constructor(
-    private readonly telegramService: TelegramService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly telegramService: TelegramService) {}
 
   /**
-   * Register webhook URL with Telegram for a tenant.
-   * Must be declared BEFORE :tenantSlug to avoid route conflict.
+   * Get list of running Telegram bots.
    */
-  @Public()
-  @Post(':tenantSlug/setup')
-  async setupWebhook(
-    @Param('tenantSlug') tenantSlug: string,
-    @Body() body: { baseUrl?: string },
-    @Req() req: any,
-  ) {
-    const appUrl = body?.baseUrl
-      || this.configService.get<string>('app.url')
-      || this.configService.get<string>('APP_URL')
-      || `${req.protocol}://${req.get('host')}`;
+  @MasterRoles('SUPER_ADMIN')
+  @Get('bots')
+  getRunningBots() {
+    return { bots: this.telegramService.getRunningBots() };
+  }
 
-    const result = await this.telegramService.setupWebhook(tenantSlug, appUrl);
-    this.logger.log(`Telegram webhook setup for ${tenantSlug}: ${JSON.stringify(result)}`);
+  /**
+   * Restart bot for a specific tenant (after config change).
+   */
+  @MasterRoles('SUPER_ADMIN')
+  @Post('bots/:tenantSlug/restart')
+  async restartBot(@Param('tenantSlug') tenantSlug: string) {
+    await this.telegramService.stopBot(tenantSlug);
+    await this.telegramService.startBot(tenantSlug);
+    this.logger.log(`Telegram bot restarted for ${tenantSlug}`);
+    return { status: 'restarted', tenant: tenantSlug };
+  }
+
+  /**
+   * Start all bots (useful after deploy or config changes).
+   */
+  @MasterRoles('SUPER_ADMIN')
+  @Post('bots/start-all')
+  async startAllBots() {
+    const result = await this.telegramService.startAllBots();
     return result;
   }
 
   /**
-   * Incoming messages from Telegram Bot.
-   * Returns 200 immediately (fire-and-forget) to avoid Telegram timeout.
+   * Stop bot for a specific tenant.
    */
-  @Public()
-  @Post(':tenantSlug')
-  async handleWebhook(
-    @Param('tenantSlug') tenantSlug: string,
-    @Body() body: TelegramUpdate,
-    @Req() req: any,
-  ) {
-    const secretToken = req.headers['x-telegram-bot-api-secret-token'] as string | undefined;
-
-    // Fire-and-forget: process async, return 200 immediately
-    this.telegramService.handleWebhook(tenantSlug, body, secretToken).catch((err) => {
-      this.logger.error(`Telegram webhook processing error for ${tenantSlug}`, err);
-    });
-
-    return { status: 'ok' };
+  @MasterRoles('SUPER_ADMIN')
+  @Post('bots/:tenantSlug/stop')
+  async stopBot(@Param('tenantSlug') tenantSlug: string) {
+    await this.telegramService.stopBot(tenantSlug);
+    return { status: 'stopped', tenant: tenantSlug };
   }
 }

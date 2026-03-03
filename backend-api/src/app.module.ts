@@ -17,6 +17,7 @@ import { MasterAdminModule } from './modules/master-admin/master-admin.module';
 import { CrawlerModule } from './modules/crawler/crawler.module';
 import { MessengerModule } from './modules/messenger/messenger.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
+import { ChatWidgetModule } from './modules/chatwidget/chatwidget.module';
 import { AppController } from './app.controller';
 import { JwtAuthGuard } from '@common/guards/auth.guard';
 import { TenantGuard } from '@common/guards/tenant.guard';
@@ -41,6 +42,7 @@ import { RolesGuard } from '@common/guards/roles.guard';
     CrawlerModule,
     MessengerModule,
     TelegramModule,
+    ChatWidgetModule,
   ],
   controllers: [AppController],
   providers: [

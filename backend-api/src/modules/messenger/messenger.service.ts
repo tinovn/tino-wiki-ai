@@ -107,7 +107,19 @@ export class MessengerService {
         },
       });
 
-      // 7. Query AI with customer memory
+      // Fetch conversation history for context
+      const recentMessages = await db.conversationMessage.findMany({
+        where: { conversationId: conversation.id },
+        orderBy: { createdAt: 'asc' },
+        take: 20,
+        select: { role: true, content: true },
+      });
+      const history = recentMessages.slice(0, -1).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      // 7. Query AI with customer memory + history
       const memories = await db.customerMemory.findMany({
         where: { customerId: customer.id },
       });
@@ -126,6 +138,7 @@ export class MessengerService {
           key: m.key,
           value: m.value,
         })),
+        conversationHistory: history,
         allowGeneralKnowledge: aiSettings.allowGeneralKnowledge ?? false,
       });
 

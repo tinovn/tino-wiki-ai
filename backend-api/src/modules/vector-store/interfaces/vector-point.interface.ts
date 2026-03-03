@@ -9,6 +9,11 @@ export interface VectorPointPayload {
   customerId?: string;
   version: number;
   metadata?: Record<string, any>;
+  documentType?: string;
+  audience?: string;
+  priority?: number;
+  categoryId?: string;
+  tags?: string[];
 }
 
 export interface VectorSearchParams {

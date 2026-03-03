@@ -1,11 +1,13 @@
 """
 BGE-M3 Embedding Service
 Provides /embed and /embed/batch endpoints compatible with tino-wiki-ai backend.
+Also provides OpenAI-compatible /v1/embeddings endpoint for Chatwoot Captain.
 """
 
 import os
 import logging
-from typing import List
+import time
+from typing import List, Union
 
 import torch
 from fastapi import FastAPI, HTTPException
@@ -57,6 +59,15 @@ class BatchEmbedResponse(BaseModel):
     count: int
 
 
+# ── OpenAI-compatible models ────────────
+
+
+class OpenAIEmbeddingRequest(BaseModel):
+    input: Union[str, List[str]]
+    model: str = MODEL_NAME
+    encoding_format: str = "float"
+
+
 # ── Endpoints ────────────────────────────
 
 
@@ -101,6 +112,49 @@ async def embed_batch(req: BatchEmbedRequest):
         dimensions=len(embeddings[0]) if embeddings else 0,
         count=len(embeddings),
     )
+
+
+# ── OpenAI-compatible endpoints (for Chatwoot Captain) ──
+
+
+@app.post("/v1/embeddings")
+async def openai_embeddings(req: OpenAIEmbeddingRequest):
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    texts = [req.input] if isinstance(req.input, str) else req.input
+    if not texts:
+        raise HTTPException(status_code=400, detail="Empty input")
+
+    embeddings = model.encode(
+        texts, batch_size=BATCH_SIZE, normalize_embeddings=True
+    ).tolist()
+
+    total_tokens = sum(len(t.split()) for t in texts)
+    return {
+        "object": "list",
+        "data": [
+            {"object": "embedding", "index": i, "embedding": emb}
+            for i, emb in enumerate(embeddings)
+        ],
+        "model": MODEL_NAME,
+        "usage": {"prompt_tokens": total_tokens, "total_tokens": total_tokens},
+    }
+
+
+@app.get("/v1/models")
+async def list_models():
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": MODEL_NAME,
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": "local",
+            }
+        ],
+    }
 
 
 if __name__ == "__main__":

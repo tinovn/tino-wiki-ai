@@ -3,6 +3,10 @@ export interface AiQueryRequest {
   customerId?: string;
   conversationId?: string;
   allowGeneralKnowledge?: boolean;
+  categoryId?: string;
+  documentType?: string;
+  audience?: string;
+  tags?: string[];
 }
 
 export interface AiSource {

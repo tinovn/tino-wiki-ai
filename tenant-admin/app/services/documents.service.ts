@@ -46,4 +46,19 @@ export const documentsService = {
     const res = await apiClient.post<ApiResponse<Document>>(`/documents/${id}/rollback`, { version });
     return res.data.data;
   },
+
+  async bulkPublish(ids: string[]): Promise<{ succeeded: number; failed: number; total: number }> {
+    const res = await apiClient.post<ApiResponse<{ succeeded: number; failed: number; total: number }>>('/documents/bulk/publish', { ids });
+    return res.data.data;
+  },
+
+  async bulkUnpublish(ids: string[]): Promise<{ succeeded: number; failed: number; total: number }> {
+    const res = await apiClient.post<ApiResponse<{ succeeded: number; failed: number; total: number }>>('/documents/bulk/unpublish', { ids });
+    return res.data.data;
+  },
+
+  async bulkDelete(ids: string[]): Promise<{ succeeded: number; failed: number; total: number }> {
+    const res = await apiClient.post<ApiResponse<{ succeeded: number; failed: number; total: number }>>('/documents/bulk/delete', { ids });
+    return res.data.data;
+  },
 };

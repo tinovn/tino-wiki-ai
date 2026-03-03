@@ -20,4 +20,9 @@ export interface PipelineContext {
     heading?: string;
     tokenCount: number;
   }>;
+  documentType?: string;
+  audience?: string;
+  priority?: number;
+  categoryId?: string;
+  tags?: string[];
 }

@@ -18,7 +18,15 @@ import { QUEUES } from '@common/constants';
       inject: [ConfigService],
     }),
     BullModule.registerQueue(
-      { name: QUEUES.AI_PIPELINE },
+      {
+        name: QUEUES.AI_PIPELINE,
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 30_000 },
+          removeOnComplete: 100,
+          removeOnFail: 200,
+        },
+      },
       { name: QUEUES.EMBEDDING },
       { name: QUEUES.SUMMARY },
       { name: QUEUES.PREFERENCE_EXTRACTION },

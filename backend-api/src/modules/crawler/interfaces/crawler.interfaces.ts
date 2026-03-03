@@ -33,6 +33,12 @@ export interface CrawlSourceConfig {
   delayMs?: number;
   /** Number of days before a crawled URL is considered stale (default: 30) */
   staleDays?: number;
+  /** Default document type for crawled documents */
+  defaultDocumentType?: string;
+  /** Default audience for crawled documents */
+  defaultAudience?: string;
+  /** Default priority for crawled documents (1-10) */
+  defaultPriority?: number;
   /** JSON field mapping for API source type */
   apiMapping?: {
     /** JSONPath to array of items (e.g., "$" for root array, "$.data.posts") */

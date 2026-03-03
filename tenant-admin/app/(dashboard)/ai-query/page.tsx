@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Card, Input, Button, Typography, Space, Tag, Divider, App, Empty, Checkbox, Tooltip } from 'antd';
-import { SendOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
+import { Card, Input, Button, Typography, Space, Tag, Divider, App, Empty, Checkbox, Tooltip, Select, Collapse } from 'antd';
+import { SendOutlined, RobotOutlined, UserOutlined, FilterOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import PageHeader from '@/components/layout/PageHeader';
 import { useAiQuery, useAiStream } from '@/hooks/useAiQuery';
+import { useCategories } from '@/hooks/useCategories';
 import type { AiQueryResponse } from '@/types/ai';
+import { DOCUMENT_TYPE_LABELS, DOCUMENT_AUDIENCE_LABELS } from '@/types/document';
+import type { DocumentType, DocumentAudience } from '@/types/document';
 
 const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -24,11 +27,15 @@ export default function AiQueryPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [useStreaming, setUseStreaming] = useState(true);
   const [allowGeneralKnowledge, setAllowGeneralKnowledge] = useState(false);
+  const [filterCategoryId, setFilterCategoryId] = useState<string | undefined>();
+  const [filterDocType, setFilterDocType] = useState<string | undefined>();
+  const [filterAudience, setFilterAudience] = useState<string | undefined>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { message: appMessage } = App.useApp();
 
   const aiQuery = useAiQuery();
   const { chunks, isStreaming, stream, reset } = useAiStream();
+  const { data: categories } = useCategories();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -42,10 +49,18 @@ export default function AiQueryPage() {
     const q = question;
     setQuestion('');
 
+    const queryParams = {
+      question: q,
+      allowGeneralKnowledge,
+      categoryId: filterCategoryId,
+      documentType: filterDocType,
+      audience: filterAudience,
+    };
+
     if (useStreaming) {
       try {
         reset();
-        const fullText = await stream({ question: q, allowGeneralKnowledge });
+        const fullText = await stream(queryParams);
         setMessages((prev) => [
           ...prev,
           { role: 'assistant', content: fullText || 'No response' },
@@ -55,7 +70,7 @@ export default function AiQueryPage() {
       }
     } else {
       try {
-        const result = await aiQuery.mutateAsync({ question: q, allowGeneralKnowledge });
+        const result = await aiQuery.mutateAsync(queryParams);
         setMessages((prev) => [
           ...prev,
           {
@@ -78,7 +93,7 @@ export default function AiQueryPage() {
         title="AI Query"
         subtitle="Test the AI knowledge engine"
         filters={
-          <Space>
+          <Space wrap>
             <Tooltip title="Khi bật, AI sẽ trả lời từ kiến thức chung nếu không tìm thấy trong tài liệu">
               <Checkbox
                 checked={allowGeneralKnowledge}
@@ -87,6 +102,41 @@ export default function AiQueryPage() {
                 Kiến thức chung
               </Checkbox>
             </Tooltip>
+            <Select
+              placeholder="Category"
+              allowClear
+              showSearch
+              optionFilterProp="children"
+              style={{ width: 150 }}
+              value={filterCategoryId}
+              onChange={setFilterCategoryId}
+            >
+              {categories?.map((cat) => (
+                <Select.Option key={cat.id} value={cat.id}>{cat.name}</Select.Option>
+              ))}
+            </Select>
+            <Select
+              placeholder="Type"
+              allowClear
+              style={{ width: 130 }}
+              value={filterDocType}
+              onChange={setFilterDocType}
+            >
+              {(Object.entries(DOCUMENT_TYPE_LABELS) as [DocumentType, string][]).map(([value, label]) => (
+                <Select.Option key={value} value={value}>{label}</Select.Option>
+              ))}
+            </Select>
+            <Select
+              placeholder="Audience"
+              allowClear
+              style={{ width: 130 }}
+              value={filterAudience}
+              onChange={setFilterAudience}
+            >
+              {(Object.entries(DOCUMENT_AUDIENCE_LABELS) as [DocumentAudience, string][]).map(([value, label]) => (
+                <Select.Option key={value} value={value}>{label}</Select.Option>
+              ))}
+            </Select>
             <Button
               size="small"
               type={useStreaming ? 'primary' : 'default'}

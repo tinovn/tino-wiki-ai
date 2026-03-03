@@ -9,7 +9,10 @@ export class PromptBuilderService {
     question: string,
     results: MergedSearchResult[],
     customerMemory?: Array<{ type: string; key: string; value: string }>,
-    options?: { allowGeneralKnowledge?: boolean },
+    options?: {
+      allowGeneralKnowledge?: boolean;
+      conversationHistory?: Array<{ role: string; content: string }>;
+    },
   ): ChatMessage[] {
     // Build context from search results
     const context = results
@@ -38,9 +41,21 @@ export class PromptBuilderService {
       ? QUERY_SYSTEM_PROMPT_GENERAL
       : QUERY_SYSTEM_PROMPT_STRICT;
 
-    return [
-      { role: 'system' as const, content: systemPrompt },
-      { role: 'user' as const, content: userContent },
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
     ];
+
+    // Add conversation history as multi-turn context (last 10 messages)
+    if (options?.conversationHistory?.length) {
+      const recent = options.conversationHistory.slice(-10);
+      for (const msg of recent) {
+        const role = msg.role === 'CUSTOMER' ? 'user' : 'assistant';
+        messages.push({ role: role as ChatMessage['role'], content: msg.content });
+      }
+    }
+
+    messages.push({ role: 'user', content: userContent });
+
+    return messages;
   }
 }

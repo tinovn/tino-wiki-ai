@@ -13,7 +13,22 @@ export class AnalyticsService {
     const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 days
     const end = endDate || new Date();
 
-    return this.queryLogRepo.getDashboardMetrics(start, end);
+    const [metrics, tokenUsage, queriesByDay, confidenceDistribution, recentQueries] =
+      await Promise.all([
+        this.queryLogRepo.getDashboardMetrics(start, end),
+        this.queryLogRepo.getTokenUsageSummary(start, end),
+        this.queryLogRepo.getQueriesByDay(7),
+        this.queryLogRepo.getConfidenceDistribution(start, end),
+        this.queryLogRepo.getRecentQueries(5),
+      ]);
+
+    return {
+      ...metrics,
+      tokenUsage,
+      queriesByDay,
+      confidenceDistribution,
+      recentQueries,
+    };
   }
 
   async getQueryLogs(page = 1, limit = 20, wasSuccessful?: boolean, startDate?: Date, endDate?: Date) {

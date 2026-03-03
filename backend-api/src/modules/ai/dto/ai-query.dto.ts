@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsArray, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
@@ -23,4 +23,25 @@ export class AiQueryDto {
   @IsBoolean()
   @Transform(({ value }) => value === true || value === 'true')
   allowGeneralKnowledge?: boolean;
+
+  @ApiPropertyOptional({ description: 'Filter by category ID' })
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by document type', enum: ['OFFICIAL', 'GUIDE', 'FAQ', 'REFERENCE', 'INTERNAL', 'PRICING', 'SERVICE'] })
+  @IsOptional()
+  @IsString()
+  documentType?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by audience', enum: ['PUBLIC', 'INTERNAL', 'AGENT'] })
+  @IsOptional()
+  @IsString()
+  audience?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by tags', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
 }

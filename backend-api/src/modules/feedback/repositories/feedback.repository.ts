@@ -48,15 +48,33 @@ export class FeedbackRepository {
 
   async getSummary() {
     const prisma = await this.tenantPrisma.getClient();
-    const results = await prisma.feedback.groupBy({
-      by: ['type'],
-      _count: { type: true },
-    });
+    const [results, total] = await Promise.all([
+      prisma.feedback.groupBy({
+        by: ['type'],
+        _count: { type: true },
+      }),
+      prisma.feedback.count(),
+    ]);
 
-    const summary: Record<string, number> = {};
+    const scoreMap: Record<string, number> = {
+      GOOD: 5,
+      PARTIALLY_CORRECT: 3,
+      OUTDATED: 2,
+      BAD: 1,
+      WRONG_SOURCE: 1,
+    };
+
+    const byType: Record<string, number> = {};
+    let weightedSum = 0;
     for (const r of results) {
-      summary[r.type] = r._count.type;
+      byType[r.type] = r._count.type;
+      weightedSum += (scoreMap[r.type] ?? 3) * r._count.type;
     }
-    return summary;
+
+    return {
+      total,
+      byType,
+      averageScore: total > 0 ? Math.round((weightedSum / total) * 10) / 10 : 0,
+    };
   }
 }

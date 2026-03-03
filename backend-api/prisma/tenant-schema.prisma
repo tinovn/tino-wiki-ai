@@ -26,10 +26,13 @@ model User {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  documents    Document[]    @relation("author")
-  feedbacks    Feedback[]
-  queryLogs    QueryLog[]
-  crawlSources CrawlSource[]
+  documents                Document[]          @relation("author")
+  feedbacks                Feedback[]
+  queryLogs                QueryLog[]
+  crawlSources             CrawlSource[]
+  assignedConversations    Conversation[]      @relation("assigned_conversations")
+  conversationNotes        ConversationNote[]  @relation("conversation_notes")
+  cannedResponses          CannedResponse[]    @relation("canned_responses")
 
   @@map("users")
 }
@@ -58,6 +61,9 @@ model Document {
   currentVersion Int            @default(1) @map("current_version")
   wordCount      Int            @default(0) @map("word_count")
   metadata       Json           @default("{}")
+  type           DocumentType     @default(REFERENCE)
+  audience       DocumentAudience @default(PUBLIC)
+  priority       Int              @default(5)
   isDeleted      Boolean        @default(false) @map("is_deleted")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
@@ -77,6 +83,8 @@ model Document {
   @@index([authorId])
   @@index([isDeleted])
   @@index([publishedAt])
+  @@index([type])
+  @@index([audience])
   @@map("documents")
 }
 
@@ -84,6 +92,22 @@ enum DocumentStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+}
+
+enum DocumentType {
+  OFFICIAL
+  GUIDE
+  FAQ
+  REFERENCE
+  INTERNAL
+  PRICING
+  SERVICE
+}
+
+enum DocumentAudience {
+  PUBLIC
+  INTERNAL
+  AGENT
 }
 
 model DocumentVersion {
@@ -291,18 +315,31 @@ enum MemorySource {
 }
 
 model Conversation {
-  id         String             @id @default(uuid()) @db.Uuid
-  customerId String             @map("customer_id") @db.Uuid
-  channel    String             @default("chat")
-  status     ConversationStatus @default(ACTIVE)
-  startedAt  DateTime           @default(now()) @map("started_at")
-  endedAt    DateTime?          @map("ended_at")
+  id              String               @id @default(uuid()) @db.Uuid
+  customerId      String               @map("customer_id") @db.Uuid
+  channel         String               @default("chat")
+  status          ConversationStatus   @default(ACTIVE)
+  assignedAgentId String?              @map("assigned_agent_id") @db.Uuid
+  priority        ConversationPriority @default(MEDIUM)
+  labels          String[]             @default([])
+  isHandoff       Boolean              @default(false) @map("is_handoff")
+  handoffReason   String?              @map("handoff_reason")
+  lastMessageAt   DateTime?            @map("last_message_at")
+  unreadCount     Int                  @default(0) @map("unread_count")
+  metadata        Json                 @default("{}")
+  startedAt       DateTime             @default(now()) @map("started_at")
+  endedAt         DateTime?            @map("ended_at")
 
-  customer Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  messages ConversationMessage[]
+  customer      Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedAgent User?                 @relation("assigned_conversations", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  messages      ConversationMessage[]
+  notes         ConversationNote[]
 
   @@index([customerId])
   @@index([status])
+  @@index([assignedAgentId])
+  @@index([lastMessageAt])
+  @@index([isHandoff])
   @@map("conversations")
 }
 
@@ -312,18 +349,56 @@ enum ConversationStatus {
   ARCHIVED
 }
 
+enum ConversationPriority {
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+  NONE
+}
+
 model ConversationMessage {
   id             String      @id @default(uuid()) @db.Uuid
   conversationId String      @map("conversation_id") @db.Uuid
   role           MessageRole
   content        String      @db.Text
+  senderId       String?     @map("sender_id") @db.Uuid
   metadata       Json        @default("{}")
   createdAt      DateTime    @default(now()) @map("created_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
+  @@index([createdAt])
   @@map("conversation_messages")
+}
+
+model ConversationNote {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  content        String   @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation("conversation_notes", fields: [userId], references: [id])
+
+  @@index([conversationId])
+  @@map("conversation_notes")
+}
+
+model CannedResponse {
+  id        String   @id @default(uuid()) @db.Uuid
+  shortCode String   @unique @map("short_code")
+  title     String
+  content   String   @db.Text
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  author User @relation("canned_responses", fields: [createdBy], references: [id])
+
+  @@map("canned_responses")
 }
 
 enum MessageRole {

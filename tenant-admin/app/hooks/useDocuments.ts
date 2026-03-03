@@ -79,3 +79,27 @@ export function useRollbackDocument() {
     },
   });
 }
+
+export function useBulkPublish() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => documentsService.bulkPublish(ids),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QUERY_KEYS.DOCUMENTS] }),
+  });
+}
+
+export function useBulkUnpublish() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => documentsService.bulkUnpublish(ids),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QUERY_KEYS.DOCUMENTS] }),
+  });
+}
+
+export function useBulkDelete() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => documentsService.bulkDelete(ids),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QUERY_KEYS.DOCUMENTS] }),
+  });
+}

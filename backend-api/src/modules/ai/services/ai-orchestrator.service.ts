@@ -44,22 +44,26 @@ export class AiOrchestratorService {
       ctx.cleanedContent = cleanedContent;
       ctx.headings = headings;
 
-      // Step 2 & 3: Summarize + Detect intents (parallel)
+      // Step 2 & 3: Summarize + Detect intents (parallel, soft-fail)
       await this.updateJobStatus(prisma, ctx.processingJobId, 'SUMMARIZING');
-      const [summaries, intents] = await Promise.all([
-        this.summarizer.generateAll(cleanedContent),
+      const [summaryResult, intents] = await Promise.all([
+        this.summarizer.generateAll(cleanedContent).catch((err) => {
+          this.logger.warn(`Summarization failed (LLM unavailable?), skipping: ${err.message}`);
+          return null;
+        }),
         this.intentDetector.detect(cleanedContent),
       ]);
 
-      ctx.summaries = {
-        short: summaries.short.summary,
-        medium: summaries.medium.summary,
-        keyPoints: summaries.keyPoints.summary,
-      };
-      ctx.intents = intents;
+      if (summaryResult) {
+        ctx.summaries = {
+          short: summaryResult.short.summary,
+          medium: summaryResult.medium.summary,
+          keyPoints: summaryResult.keyPoints.summary,
+        };
+        await this.saveSummaries(prisma, ctx);
+      }
 
-      // Save summaries
-      await this.saveSummaries(prisma, ctx);
+      ctx.intents = intents;
       await this.saveIntents(prisma, ctx);
 
       // Step 4: Chunk
@@ -72,6 +76,25 @@ export class AiOrchestratorService {
 
       // Step 5: Embed + Store in Qdrant
       await this.updateJobStatus(prisma, ctx.processingJobId, 'EMBEDDING');
+
+      // Load document classification metadata for vector payload
+      const doc = await prisma.document.findUnique({
+        where: { id: ctx.documentId },
+        select: {
+          type: true,
+          audience: true,
+          priority: true,
+          categoryId: true,
+          tags: { select: { tag: { select: { name: true } } } },
+        },
+      });
+      if (doc) {
+        ctx.documentType = doc.type || 'REFERENCE';
+        ctx.audience = doc.audience || 'PUBLIC';
+        ctx.priority = doc.priority ?? 5;
+        ctx.categoryId = doc.categoryId || '';
+        ctx.tags = (doc.tags || []).map((t: any) => t.tag.name);
+      }
 
       // Delete old version vectors first
       await this.vectorStore.deleteByDocumentId(ctx.tenantSlug, ctx.documentId);
@@ -96,6 +119,11 @@ export class AiOrchestratorService {
             intents: (ctx.intents || []).map((i) => i.name),
             layer: 'tenant' as const,
             version: ctx.version,
+            documentType: ctx.documentType || 'REFERENCE',
+            audience: ctx.audience || 'PUBLIC',
+            priority: ctx.priority ?? 5,
+            categoryId: ctx.categoryId || '',
+            tags: ctx.tags || [],
           },
         }));
 

@@ -357,6 +357,9 @@ export class CrawlerProcessor extends WorkerHost {
         authorId: source.createdById,
         categoryId: source.categoryId,
         wordCount,
+        type: config.defaultDocumentType || 'REFERENCE',
+        audience: config.defaultAudience || 'PUBLIC',
+        priority: config.defaultPriority ?? 3,
         metadata: {
           ...extracted.metadata,
           crawlSourceId: source.id,

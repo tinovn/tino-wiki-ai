@@ -122,18 +122,11 @@ services:
     restart: unless-stopped
     environment:
       MODEL_NAME: ${EMBEDDING_MODEL:-BAAI/bge-m3}
-      DEVICE: ${EMBEDDING_DEVICE:-cuda}
+      DEVICE: ${EMBEDDING_DEVICE:-cpu}
       BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-32}
       PORT: 8001
     volumes:
       - embedding_models:/app/models
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     expose:
       - "8001"
     healthcheck:

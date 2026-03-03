@@ -10,12 +10,24 @@ export interface MessengerConfig {
 export interface TelegramConfig {
   botToken: string;
   botUsername?: string;
-  webhookSecret?: string;
+}
+
+export interface ChatWidgetConfig {
+  enabled: boolean;
+  widgetToken?: string;
+  theme: {
+    primaryColor: string;
+    position: 'bottom-right' | 'bottom-left';
+  };
+  welcomeMessage: string;
+  placeholder: string;
+  title: string;
 }
 
 export interface ChannelsConfig {
   messenger: MessengerConfig | null;
   telegram: TelegramConfig | null;
+  chatwidget: ChatWidgetConfig | null;
 }
 
 export const channelsService = {
@@ -24,13 +36,17 @@ export const channelsService = {
     return res.data.data;
   },
 
-  async updateChannels(data: { messenger?: MessengerConfig | null; telegram?: TelegramConfig | null }): Promise<ChannelsConfig> {
+  async updateChannels(data: {
+    messenger?: MessengerConfig | null;
+    telegram?: TelegramConfig | null;
+    chatwidget?: ChatWidgetConfig | null;
+  }): Promise<ChannelsConfig> {
     const res = await apiClient.patch<ApiResponse<ChannelsConfig>>('/ai/channels', data);
     return res.data.data;
   },
 
-  async setupTelegramWebhook(tenantSlug: string, baseUrl?: string): Promise<{ ok: boolean; description?: string }> {
-    const res = await apiClient.post<{ ok: boolean; description?: string }>(`/webhooks/telegram/${tenantSlug}/setup`, { baseUrl });
-    return res.data;
+  async generateWidgetToken(): Promise<{ widgetToken: string }> {
+    const res = await apiClient.post<ApiResponse<{ widgetToken: string }>>('/ai/channels/chatwidget/generate-token');
+    return res.data.data;
   },
 };

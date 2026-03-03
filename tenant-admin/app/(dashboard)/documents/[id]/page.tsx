@@ -1,8 +1,9 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { Card, Form, Input, Select, Button, Tag, Space, Timeline, App, Popconfirm, Typography, Spin } from 'antd';
+import { Card, Form, Input, InputNumber, Select, Button, Tag, Space, Timeline, App, Popconfirm, Typography, Spin } from 'antd';
 import PageHeader from '@/components/layout/PageHeader';
+import MarkdownEditor from '@/components/common/MarkdownEditor';
 import {
   useDocument,
   useUpdateDocument,
@@ -12,9 +13,10 @@ import {
   useRollbackDocument,
 } from '@/hooks/useDocuments';
 import { useCategories } from '@/hooks/useCategories';
-import { useTags } from '@/hooks/useTags';
+import { useTags, useCreateTag } from '@/hooks/useTags';
+import { DOCUMENT_TYPE_LABELS, DOCUMENT_AUDIENCE_LABELS } from '@/types/document';
+import type { DocumentType, DocumentAudience } from '@/types/document';
 
-const { TextArea } = Input;
 const { Text } = Typography;
 
 export default function EditDocumentPage() {
@@ -33,6 +35,7 @@ export default function EditDocumentPage() {
   const publishDoc = usePublishDocument();
   const unpublishDoc = useUnpublishDocument();
   const rollbackDoc = useRollbackDocument();
+  const createTag = useCreateTag();
 
   if (isLoading) {
     return (
@@ -82,6 +85,16 @@ export default function EditDocumentPage() {
     }
   };
 
+  const handleCreateTag = async (name: string) => {
+    try {
+      const newTag = await createTag.mutateAsync({ name });
+      const current = form.getFieldValue('tagIds') || [];
+      form.setFieldsValue({ tagIds: [...current, newTag.id] });
+    } catch {
+      message.error('Failed to create tag');
+    }
+  };
+
   const statusColors: Record<string, string> = { DRAFT: 'default', PUBLISHED: 'green', ARCHIVED: 'orange' };
 
   return (
@@ -122,6 +135,9 @@ export default function EditDocumentPage() {
               categoryId: doc.categoryId,
               tagIds: doc.tags?.map((t) => t.id),
               content: doc.content,
+              type: doc.type || 'REFERENCE',
+              audience: doc.audience || 'PUBLIC',
+              priority: doc.priority ?? 5,
             }}
           >
             <Form.Item name="title" label="Title" rules={[{ required: true }]}>
@@ -133,7 +149,7 @@ export default function EditDocumentPage() {
             </Form.Item>
 
             <Form.Item name="categoryId" label="Category">
-              <Select placeholder="Select category" allowClear>
+              <Select placeholder="Select category" allowClear showSearch optionFilterProp="children">
                 {categories?.map((cat) => (
                   <Select.Option key={cat.id} value={cat.id}>{cat.name}</Select.Option>
                 ))}
@@ -141,19 +157,55 @@ export default function EditDocumentPage() {
             </Form.Item>
 
             <Form.Item name="tagIds" label="Tags">
-              <Select mode="multiple" placeholder="Select tags" allowClear>
+              <Select
+                mode="multiple"
+                placeholder="Select or type to create tags"
+                allowClear
+                showSearch
+                optionFilterProp="children"
+                onInputKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const input = (e.target as HTMLInputElement).value?.trim();
+                    if (input && tags && !tags.some((t) => t.name.toLowerCase() === input.toLowerCase())) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleCreateTag(input);
+                    }
+                  }
+                }}
+              >
                 {tags?.map((tag) => (
                   <Select.Option key={tag.id} value={tag.id}>{tag.name}</Select.Option>
                 ))}
               </Select>
             </Form.Item>
 
+            <Space size="middle" style={{ width: '100%' }} align="start">
+              <Form.Item name="type" label="Loại tài liệu" style={{ minWidth: 180 }}>
+                <Select>
+                  {(Object.entries(DOCUMENT_TYPE_LABELS) as [DocumentType, string][]).map(([value, label]) => (
+                    <Select.Option key={value} value={value}>{label}</Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item name="audience" label="Đối tượng" style={{ minWidth: 160 }}>
+                <Select>
+                  {(Object.entries(DOCUMENT_AUDIENCE_LABELS) as [DocumentAudience, string][]).map(([value, label]) => (
+                    <Select.Option key={value} value={value}>{label}</Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item name="priority" label="Độ ưu tiên (1-10)">
+                <InputNumber min={1} max={10} />
+              </Form.Item>
+            </Space>
+
             <Form.Item name="changeNote" label="Change Note">
               <Input placeholder="What changed in this update?" />
             </Form.Item>
 
-            <Form.Item name="content" label="Content (Markdown)" rules={[{ required: true }]}>
-              <TextArea rows={20} />
+            <Form.Item name="content" label="Content" rules={[{ required: true }]}>
+              <MarkdownEditor placeholder="Write your document content..." minHeight={500} />
             </Form.Item>
 
             <Form.Item>

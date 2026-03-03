@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsInt, IsIn, MinLength, Min, Max } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateDocumentDto {
@@ -26,4 +26,21 @@ export class CreateDocumentDto {
   @IsOptional()
   @IsString()
   excerpt?: string;
+
+  @ApiPropertyOptional({ enum: ['OFFICIAL', 'GUIDE', 'FAQ', 'REFERENCE', 'INTERNAL', 'PRICING', 'SERVICE'] })
+  @IsOptional()
+  @IsIn(['OFFICIAL', 'GUIDE', 'FAQ', 'REFERENCE', 'INTERNAL', 'PRICING', 'SERVICE'])
+  type?: string;
+
+  @ApiPropertyOptional({ enum: ['PUBLIC', 'INTERNAL', 'AGENT'] })
+  @IsOptional()
+  @IsIn(['PUBLIC', 'INTERNAL', 'AGENT'])
+  audience?: string;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 10 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  priority?: number;
 }

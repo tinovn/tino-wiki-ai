@@ -53,8 +53,8 @@ export interface Conversation {
   customerId: string;
   channel: string;
   status: string;
-  createdAt: string;
-  updatedAt: string;
+  startedAt: string;
+  endedAt?: string;
 }
 
 export interface ConversationMessage {

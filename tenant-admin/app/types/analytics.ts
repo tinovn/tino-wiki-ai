@@ -6,6 +6,39 @@ export interface DashboardMetrics {
   failedQueries: number;
   successRate: number;
   avgLatencyMs: number;
+  tokenUsage?: TokenUsageSummary;
+  queriesByDay?: DailyQueryStats[];
+  confidenceDistribution?: ConfidenceRange[];
+  recentQueries?: RecentQuery[];
+}
+
+export interface TokenUsageSummary {
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+}
+
+export interface DailyQueryStats {
+  date: string;
+  total: number;
+  successful: number;
+  failed: number;
+}
+
+export interface ConfidenceRange {
+  range: string;
+  count: number;
+  color: string;
+}
+
+export interface RecentQuery {
+  id: string;
+  question: string;
+  confidence?: number;
+  wasSuccessful: boolean;
+  latencyMs?: number;
+  createdAt: string;
 }
 
 export interface QueryLog {

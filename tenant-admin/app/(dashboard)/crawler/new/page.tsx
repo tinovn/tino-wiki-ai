@@ -1,11 +1,13 @@
 'use client';
 
-import { Form, Input, Select, Button, Card, Space, App } from 'antd';
+import { Form, Input, InputNumber, Select, Button, Card, Space, App, Divider } from 'antd';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/layout/PageHeader';
 import { useCreateCrawlSource } from '@/hooks/useCrawler';
 import { useCategories } from '@/hooks/useCategories';
 import type { CreateCrawlSourceRequest, CrawlSourceType } from '@/types/crawler';
+import { DOCUMENT_TYPE_LABELS, DOCUMENT_AUDIENCE_LABELS } from '@/types/document';
+import type { DocumentType, DocumentAudience } from '@/types/document';
 
 const SCHEDULE_PRESETS = [
   { label: 'Manual only', value: '' },
@@ -40,6 +42,11 @@ export default function NewCrawlSourcePage() {
     if (values.titleSelector) data.config!.titleSelector = values.titleSelector;
     if (values.maxPages) data.config!.maxPages = parseInt(values.maxPages);
     if (values.delayMs) data.config!.delayMs = parseInt(values.delayMs);
+
+    // Default document classification settings
+    if (values.defaultDocumentType) data.config!.defaultDocumentType = values.defaultDocumentType;
+    if (values.defaultAudience) data.config!.defaultAudience = values.defaultAudience;
+    if (values.defaultPriority != null) data.config!.defaultPriority = values.defaultPriority;
 
     // API mapping
     if (values.type === 'API') {
@@ -144,6 +151,28 @@ export default function NewCrawlSourcePage() {
           <Form.Item name="delayMs" label="Delay between requests (ms)">
             <Input type="number" placeholder="1000 (default)" />
           </Form.Item>
+
+          <Divider>Phân loại tài liệu mặc định</Divider>
+
+          <Space size="middle" style={{ width: '100%' }} align="start">
+            <Form.Item name="defaultDocumentType" label="Loại tài liệu" initialValue="REFERENCE" style={{ minWidth: 180 }}>
+              <Select>
+                {(Object.entries(DOCUMENT_TYPE_LABELS) as [DocumentType, string][]).map(([value, label]) => (
+                  <Select.Option key={value} value={value}>{label}</Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+            <Form.Item name="defaultAudience" label="Đối tượng" initialValue="PUBLIC" style={{ minWidth: 160 }}>
+              <Select>
+                {(Object.entries(DOCUMENT_AUDIENCE_LABELS) as [DocumentAudience, string][]).map(([value, label]) => (
+                  <Select.Option key={value} value={value}>{label}</Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+            <Form.Item name="defaultPriority" label="Độ ưu tiên (1-10)" initialValue={3}>
+              <InputNumber min={1} max={10} />
+            </Form.Item>
+          </Space>
 
           <Form.Item>
             <Space>

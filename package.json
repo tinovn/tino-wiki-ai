@@ -1,0 +1,13 @@
+{
+  "name": "tino-wiki-crm",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n api,tenant,master -c blue,green,yellow \"cd backend-api && npm run start:dev\" \"cd tenant-admin && npm run dev\" \"cd master-admin && npm run dev\"",
+    "dev:api": "cd backend-api && npm run start:dev",
+    "dev:tenant": "cd tenant-admin && npm run dev",
+    "dev:master": "cd master-admin && npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

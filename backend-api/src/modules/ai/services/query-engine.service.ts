@@ -30,8 +30,13 @@ export class QueryEngineService {
     question: string;
     customerId?: string;
     customerMemory?: Array<{ type: string; key: string; value: string }>;
+    conversationHistory?: Array<{ role: string; content: string }>;
     provider?: string;
     allowGeneralKnowledge?: boolean;
+    categoryId?: string;
+    documentType?: string;
+    audience?: string;
+    tags?: string[];
   }): Promise<QueryResult> {
     const startTime = Date.now();
 
@@ -54,6 +59,12 @@ export class QueryEngineService {
       const embedResult = await embeddingAdapter.embed([params.question]);
       const questionVector = embedResult.embeddings[0];
 
+      // Build dynamic filter for tenant search
+      const tenantFilter: Record<string, any> = { layer: 'tenant' };
+      if (params.categoryId) tenantFilter.categoryId = params.categoryId;
+      if (params.documentType) tenantFilter.documentType = params.documentType;
+      if (params.audience) tenantFilter.audience = params.audience;
+
       const [customerResults, tenantResults, masterResults] = await Promise.all([
         params.customerId
           ? this.vectorStore.search(params.tenantSlug, {
@@ -65,7 +76,7 @@ export class QueryEngineService {
         this.vectorStore.search(params.tenantSlug, {
           vector: questionVector,
           limit: 8,
-          filter: { layer: 'tenant' },
+          filter: tenantFilter,
         }).catch(() => []),
         this.vectorStore.search('master', {
           vector: questionVector,
@@ -84,7 +95,10 @@ export class QueryEngineService {
       params.question,
       mergedResults,
       params.customerMemory,
-      { allowGeneralKnowledge: params.allowGeneralKnowledge },
+      {
+        allowGeneralKnowledge: params.allowGeneralKnowledge,
+        conversationHistory: params.conversationHistory,
+      },
     );
 
     // Step 5: Call LLM
@@ -150,8 +164,13 @@ export class QueryEngineService {
     question: string;
     customerId?: string;
     customerMemory?: Array<{ type: string; key: string; value: string }>;
+    conversationHistory?: Array<{ role: string; content: string }>;
     provider?: string;
     allowGeneralKnowledge?: boolean;
+    categoryId?: string;
+    documentType?: string;
+    audience?: string;
+    tags?: string[];
   }): AsyncIterable<ChatStreamChunk> {
     let mergedResults: any[] = [];
 
@@ -160,6 +179,12 @@ export class QueryEngineService {
       const embeddingAdapter = this.llmFactory.getEmbeddingAdapter();
       const embedResult = await embeddingAdapter.embed([params.question]);
       const questionVector = embedResult.embeddings[0];
+
+      // Build dynamic filter for tenant search
+      const tenantFilter: Record<string, any> = { layer: 'tenant' };
+      if (params.categoryId) tenantFilter.categoryId = params.categoryId;
+      if (params.documentType) tenantFilter.documentType = params.documentType;
+      if (params.audience) tenantFilter.audience = params.audience;
 
       const [customerResults, tenantResults, masterResults] = await Promise.all([
         params.customerId
@@ -172,7 +197,7 @@ export class QueryEngineService {
         this.vectorStore.search(params.tenantSlug, {
           vector: questionVector,
           limit: 8,
-          filter: { layer: 'tenant' },
+          filter: tenantFilter,
         }).catch(() => []),
         this.vectorStore.search('master', {
           vector: questionVector,
@@ -191,7 +216,10 @@ export class QueryEngineService {
       params.question,
       mergedResults,
       params.customerMemory,
-      { allowGeneralKnowledge: params.allowGeneralKnowledge },
+      {
+        allowGeneralKnowledge: params.allowGeneralKnowledge,
+        conversationHistory: params.conversationHistory,
+      },
     );
 
     // Stream LLM response and collect full answer for analytics
