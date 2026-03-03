@@ -50,6 +50,11 @@ export interface InboxMessage {
   createdAt: string;
 }
 
+export interface MessagesPage {
+  messages: InboxMessage[];
+  nextCursor: string | null; // ISO date of oldest message, null = no more
+}
+
 export interface ConversationNote {
   id: string;
   userId: string;

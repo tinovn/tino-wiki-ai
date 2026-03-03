@@ -1,54 +1,58 @@
 'use client';
 
-import { Typography } from 'antd';
-import { RobotOutlined, UserOutlined, CustomerServiceOutlined } from '@ant-design/icons';
-import type { InboxMessage } from '@/types/conversation';
+import { UserOutlined, RobotOutlined } from '@ant-design/icons';
+import type { MessageGroup } from '@/utils/message-grouping';
 import dayjs from 'dayjs';
 
-const { Text } = Typography;
-
 interface Props {
-  message: InboxMessage;
+  group: MessageGroup;
 }
 
-export default function MessageBubble({ message }: Props) {
-  const { role, content, createdAt, metadata } = message;
+export default function MessageGroupBubble({ group }: Props) {
+  const { role, messages } = group;
 
+  // System messages
   if (role === 'SYSTEM') {
     return (
-      <div className="message-bubble message-bubble-system">
-        <Text type="secondary" style={{ fontSize: 12 }}>{content}</Text>
+      <div className="msg-system">
+        <span>{messages[0].content}</span>
       </div>
     );
   }
 
+  const isRight = role === 'AGENT';
   const isCustomer = role === 'CUSTOMER';
-  const isAgent = role === 'AGENT';
-  const isAi = role === 'AI_ASSISTANT';
-  const isSuggestion = (metadata as any)?.isSuggestion;
-
-  const bubbleClass = isCustomer
-    ? 'message-bubble-customer'
-    : isAgent
-    ? 'message-bubble-agent'
-    : 'message-bubble-ai';
+  const alignClass = isRight ? 'msg-row-right' : 'msg-row-left';
+  const colorClass = isCustomer ? 'bubble-customer' : role === 'AGENT' ? 'bubble-agent' : 'bubble-ai';
 
   return (
-    <div className={`message-row ${isCustomer ? 'message-row-left' : 'message-row-right'}`}>
-      <div className={`message-bubble ${bubbleClass}`}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-          {isCustomer && <UserOutlined style={{ fontSize: 11 }} />}
-          {isAgent && <CustomerServiceOutlined style={{ fontSize: 11 }} />}
-          {isAi && <RobotOutlined style={{ fontSize: 11 }} />}
-          <Text style={{ fontSize: 11, opacity: 0.7 }}>
-            {isCustomer ? 'Khách' : isAgent ? 'Nhân viên' : 'AI'}
-            {isSuggestion && ' (gợi ý)'}
-          </Text>
+    <div className={`msg-group ${alignClass}`}>
+      {!isRight && (
+        <div className="msg-avatar">
+          {isCustomer ? <UserOutlined /> : <RobotOutlined />}
         </div>
-        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{content}</div>
-        <Text style={{ fontSize: 10, opacity: 0.5, display: 'block', textAlign: 'right', marginTop: 2 }}>
-          {dayjs(createdAt).format('HH:mm')}
-        </Text>
+      )}
+      <div className="msg-bubbles">
+        {messages.map((msg, i) => {
+          const isFirst = i === 0;
+          const isLast = i === messages.length - 1;
+          const isOnly = messages.length === 1;
+          const shapeClass = isOnly ? 'bubble-only' : isFirst ? 'bubble-first' : isLast ? 'bubble-last' : 'bubble-mid';
+          const isOptimistic = (msg.metadata as Record<string, unknown>)?._optimistic;
+
+          return (
+            <div
+              key={msg.id}
+              className={`msg-bubble ${colorClass} ${shapeClass}`}
+              style={isOptimistic ? { opacity: 0.7 } : undefined}
+            >
+              <div className="msg-content">{msg.content}</div>
+              {isLast && (
+                <span className="msg-time">{dayjs(msg.createdAt).format('HH:mm')}</span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

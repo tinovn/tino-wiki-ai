@@ -148,7 +148,7 @@ services:
     build:
       context: ./backend-api
       dockerfile: Dockerfile
-    container_name: tino-wiki-backend
+    # No container_name — allows docker compose --scale backend=N
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -198,6 +198,12 @@ services:
       CHUNK_MAX_TOKENS: ${CHUNK_MAX_TOKENS:-800}
       CHUNK_OVERLAP_TOKENS: ${CHUNK_OVERLAP_TOKENS:-50}
       MAX_SEARCH_RESULTS: ${MAX_SEARCH_RESULTS:-10}
+
+      # Push Notifications
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@tino.vn}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      FIREBASE_SERVICE_ACCOUNT_PATH: ${FIREBASE_SERVICE_ACCOUNT_PATH:-}
     expose:
       - "3000"
     depends_on:

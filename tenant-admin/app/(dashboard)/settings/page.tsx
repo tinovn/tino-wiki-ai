@@ -5,6 +5,8 @@ import { Card, Form, Input, Select, Switch, Button, Typography, Space, Divider, 
 import PageHeader from '@/components/layout/PageHeader';
 import { useAuth } from '@/providers/AuthProvider';
 import { aiService } from '@/services/ai.service';
+import { initPushService, subscribeToPush, unsubscribeFromPush, isPushSubscribed } from '@/services/push.service';
+import apiClient from '@/lib/api-client';
 
 const { Title, Text } = Typography;
 
@@ -16,6 +18,19 @@ export default function SettingsPage() {
   const [loadingAi, setLoadingAi] = useState(true);
   const [allowGeneralKnowledge, setAllowGeneralKnowledge] = useState(false);
   const [savingAi, setSavingAi] = useState(false);
+
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [notifPrefs, setNotifPrefs] = useState({
+    desktopEnabled: true,
+    mobilePushEnabled: true,
+    soundEnabled: true,
+    newMessageEnabled: true,
+    handoffEnabled: true,
+    assignmentEnabled: true,
+  });
+  const [savingNotifPrefs, setSavingNotifPrefs] = useState(false);
 
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [savingMessages, setSavingMessages] = useState(false);
@@ -52,6 +67,29 @@ export default function SettingsPage() {
       .then((data) => setMessages(data))
       .catch(() => {})
       .finally(() => setLoadingMessages(false));
+
+    // Init push notifications
+    initPushService().then((supported) => {
+      setPushSupported(supported);
+      if (supported) {
+        isPushSubscribed().then(setPushEnabled);
+      }
+    });
+
+    // Load notification preferences
+    apiClient.get('/notification-preferences')
+      .then((res) => {
+        const p = res.data;
+        setNotifPrefs({
+          desktopEnabled: p.desktopEnabled ?? true,
+          mobilePushEnabled: p.mobilePushEnabled ?? true,
+          soundEnabled: p.soundEnabled ?? true,
+          newMessageEnabled: p.newMessageEnabled ?? true,
+          handoffEnabled: p.handoffEnabled ?? true,
+          assignmentEnabled: p.assignmentEnabled ?? true,
+        });
+      })
+      .catch(() => {});
   }, []);
 
   const handleToggleGeneralKnowledge = async (checked: boolean) => {
@@ -96,6 +134,41 @@ export default function SettingsPage() {
       ...prev,
       [scope]: { ...prev[scope], [key]: value },
     }));
+  };
+
+  const handleTogglePush = async (checked: boolean) => {
+    setPushLoading(true);
+    try {
+      if (checked) {
+        const success = await subscribeToPush();
+        if (success) {
+          setPushEnabled(true);
+          message.success('Push notification đã được bật');
+        } else {
+          message.error('Không thể bật push notification. Vui lòng kiểm tra quyền trình duyệt.');
+        }
+      } else {
+        await unsubscribeFromPush();
+        setPushEnabled(false);
+        message.success('Push notification đã được tắt');
+      }
+    } catch {
+      message.error('Lỗi khi thay đổi push notification');
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const handleSaveNotifPrefs = async () => {
+    setSavingNotifPrefs(true);
+    try {
+      await apiClient.patch('/notification-preferences', notifPrefs);
+      message.success('Đã lưu cài đặt thông báo');
+    } catch {
+      message.error('Lưu thất bại');
+    } finally {
+      setSavingNotifPrefs(false);
+    }
   };
 
   const getPlaceholder = (scope: string, key: string): string => {
@@ -220,6 +293,76 @@ export default function SettingsPage() {
               </Button>
             </>
           )}
+        </Card>
+      </section>
+
+      <section style={{ marginTop: 24 }}>
+        <Card title="Thông báo" size="small">
+          <Space direction="vertical" style={{ width: '100%' }} size="large">
+            {pushSupported && (
+              <div>
+                <Title level={5} style={{ margin: 0 }}>Push Notification (Browser)</Title>
+                <Text type="secondary">
+                  Nhận thông báo ngay cả khi không mở tab. Cần cấp quyền trình duyệt.
+                </Text>
+                <br />
+                <Switch
+                  checked={pushEnabled}
+                  onChange={handleTogglePush}
+                  loading={pushLoading}
+                  style={{ marginTop: 8 }}
+                />
+                <Text style={{ marginLeft: 8 }}>
+                  {pushEnabled ? 'Đang bật' : 'Đang tắt'}
+                </Text>
+              </div>
+            )}
+            <Divider style={{ margin: 0 }} />
+            <div>
+              <Title level={5} style={{ margin: 0 }}>Loại thông báo</Title>
+              <Space direction="vertical" style={{ marginTop: 8 }}>
+                <div>
+                  <Switch
+                    checked={notifPrefs.newMessageEnabled}
+                    onChange={(v) => setNotifPrefs((p) => ({ ...p, newMessageEnabled: v }))}
+                    size="small"
+                  />
+                  <Text style={{ marginLeft: 8 }}>Tin nhắn mới từ khách hàng</Text>
+                </div>
+                <div>
+                  <Switch
+                    checked={notifPrefs.handoffEnabled}
+                    onChange={(v) => setNotifPrefs((p) => ({ ...p, handoffEnabled: v }))}
+                    size="small"
+                  />
+                  <Text style={{ marginLeft: 8 }}>Chuyển tiếp nhân viên (handoff)</Text>
+                </div>
+                <div>
+                  <Switch
+                    checked={notifPrefs.assignmentEnabled}
+                    onChange={(v) => setNotifPrefs((p) => ({ ...p, assignmentEnabled: v }))}
+                    size="small"
+                  />
+                  <Text style={{ marginLeft: 8 }}>Được phân công hội thoại</Text>
+                </div>
+                <div>
+                  <Switch
+                    checked={notifPrefs.soundEnabled}
+                    onChange={(v) => setNotifPrefs((p) => ({ ...p, soundEnabled: v }))}
+                    size="small"
+                  />
+                  <Text style={{ marginLeft: 8 }}>Âm thanh thông báo</Text>
+                </div>
+              </Space>
+            </div>
+            <Button
+              type="primary"
+              onClick={handleSaveNotifPrefs}
+              loading={savingNotifPrefs}
+            >
+              Lưu cài đặt thông báo
+            </Button>
+          </Space>
         </Card>
       </section>
 

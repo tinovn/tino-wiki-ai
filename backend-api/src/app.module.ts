@@ -20,6 +20,7 @@ import { TelegramModule } from './modules/telegram/telegram.module';
 import { ChatWidgetModule } from './modules/chatwidget/chatwidget.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { EcommerceChatbotModule } from './modules/ecommerce-chatbot/ecommerce-chatbot.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AppController } from './app.controller';
 import { JwtAuthGuard } from '@common/guards/auth.guard';
 import { TenantGuard } from '@common/guards/tenant.guard';
@@ -47,6 +48,7 @@ import { RolesGuard } from '@common/guards/roles.guard';
     ChatWidgetModule,
     ConversationsModule,
     EcommerceChatbotModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

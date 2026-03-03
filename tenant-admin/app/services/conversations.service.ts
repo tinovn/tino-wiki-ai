@@ -4,6 +4,7 @@ import type {
   InboxConversation,
   ConversationDetail,
   InboxMessage,
+  MessagesPage,
   ConversationNote,
   CannedResponse,
   ConversationFilter,
@@ -20,10 +21,14 @@ export const conversationsService = {
     return res.data.data;
   },
 
-  async getMessages(id: string, cursor?: string): Promise<InboxMessage[]> {
-    const params = cursor ? { cursor } : {};
+  async getMessages(id: string, cursor?: string, limit = 50): Promise<MessagesPage> {
+    const params: Record<string, string> = { limit: String(limit) };
+    if (cursor) params.cursor = cursor;
     const res = await apiClient.get<ApiResponse<InboxMessage[]>>(`/conversations/${id}/messages`, { params });
-    return res.data.data;
+    const messages = res.data.data;
+    // nextCursor = createdAt of oldest message when full page returned
+    const nextCursor = messages.length === limit ? messages[0]?.createdAt : null;
+    return { messages, nextCursor };
   },
 
   async sendMessage(id: string, content: string): Promise<InboxMessage> {

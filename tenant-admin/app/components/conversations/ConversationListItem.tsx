@@ -1,32 +1,22 @@
 'use client';
 
-import { Avatar, Badge, Tag, Typography } from 'antd';
-import {
-  UserOutlined,
-  FacebookOutlined,
-  MessageOutlined,
-  SendOutlined,
-  AlertOutlined,
-} from '@ant-design/icons';
 import type { InboxConversation } from '@/types/conversation';
 import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-
-dayjs.extend(relativeTime);
-
-const { Text } = Typography;
-
-const CHANNEL_ICONS: Record<string, React.ReactNode> = {
-  messenger: <FacebookOutlined style={{ color: '#1877F2' }} />,
-  telegram: <SendOutlined style={{ color: '#0088cc' }} />,
-  chatwidget: <MessageOutlined style={{ color: '#1677ff' }} />,
-};
 
 const CHANNEL_COLORS: Record<string, string> = {
   messenger: '#1877F2',
   telegram: '#0088cc',
   chatwidget: '#1677ff',
 };
+
+function formatConvTime(date: string): string {
+  const d = dayjs(date);
+  const now = dayjs();
+  if (d.isSame(now, 'day')) return d.format('HH:mm');
+  if (d.isSame(now.subtract(1, 'day'), 'day')) return 'Hôm qua';
+  if (d.isSame(now, 'year')) return d.format('DD/MM');
+  return d.format('DD/MM/YY');
+}
 
 interface Props {
   conversation: InboxConversation;
@@ -35,48 +25,29 @@ interface Props {
 }
 
 export default function ConversationListItem({ conversation, selected, onClick }: Props) {
-  const { customer, channel, lastMessage, lastMessageAt, unreadCount, isHandoff, labels } = conversation;
-  const customerName = customer.name || customer.email || customer.externalId || 'Khách';
+  const { customer, channel, lastMessage, lastMessageAt, unreadCount, isHandoff } = conversation;
+  const name = customer.name || customer.email || customer.externalId || 'Khách';
+  const avatarColor = CHANNEL_COLORS[channel] || '#999';
+  const hasUnread = unreadCount > 0;
 
   return (
-    <div
-      className={`conv-list-item ${selected ? 'conv-list-item-selected' : ''}`}
-      onClick={onClick}
-    >
-      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-        <Badge count={unreadCount} size="small" offset={[-4, 4]}>
-          <Avatar size={40} icon={<UserOutlined />} style={{ flexShrink: 0 }}>
-            {customerName[0]?.toUpperCase()}
-          </Avatar>
-        </Badge>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text strong ellipsis style={{ maxWidth: 160 }}>
-              {customerName}
-            </Text>
-            <Text type="secondary" style={{ fontSize: 11, flexShrink: 0 }}>
-              {lastMessageAt ? dayjs(lastMessageAt).fromNow() : ''}
-            </Text>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-            {CHANNEL_ICONS[channel] || <MessageOutlined />}
-            <Text type="secondary" ellipsis style={{ fontSize: 12, flex: 1 }}>
-              {lastMessage?.content || 'Chưa có tin nhắn'}
-            </Text>
-          </div>
-
-          <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
-            {isHandoff && (
-              <Tag color="warning" icon={<AlertOutlined />} style={{ margin: 0, fontSize: 11 }}>
-                Handoff
-              </Tag>
-            )}
-            {labels.slice(0, 2).map((label) => (
-              <Tag key={label} style={{ margin: 0, fontSize: 11 }}>{label}</Tag>
-            ))}
-          </div>
+    <div className={`conv-item ${selected ? 'conv-item-active' : ''}`} onClick={onClick}>
+      <div className="conv-avatar" style={{ background: avatarColor }}>
+        {name[0]?.toUpperCase()}
+      </div>
+      <div className="conv-body">
+        <div className="conv-top-row">
+          <span className={`conv-name ${hasUnread ? 'conv-name-unread' : ''}`}>{name}</span>
+          <span className={`conv-time ${hasUnread ? 'conv-time-unread' : ''}`}>
+            {lastMessageAt ? formatConvTime(lastMessageAt) : ''}
+          </span>
+        </div>
+        <div className="conv-bottom-row">
+          <span className="conv-preview">
+            {isHandoff && '⚠ '}
+            {lastMessage?.content || 'Chưa có tin nhắn'}
+          </span>
+          {hasUnread && <span className="conv-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
         </div>
       </div>
     </div>

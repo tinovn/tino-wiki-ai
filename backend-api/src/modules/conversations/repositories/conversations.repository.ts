@@ -98,11 +98,14 @@ export class ConversationsRepository {
       where.createdAt = { lt: new Date(cursor) };
     }
 
-    return prisma.conversationMessage.findMany({
+    // Fetch DESC to get newest messages first, then reverse for chronological order
+    const messages = await prisma.conversationMessage.findMany({
       where,
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: limit,
     });
+
+    return messages.reverse();
   }
 
   async createMessage(data: {
