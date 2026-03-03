@@ -194,8 +194,39 @@ export class QueryEngineService {
       { allowGeneralKnowledge: params.allowGeneralKnowledge },
     );
 
-    // Stream LLM response
+    // Stream LLM response and collect full answer for analytics
+    const startTime = Date.now();
     const chatAdapter = this.llmFactory.getChatAdapter(params.provider);
-    yield* chatAdapter.chatStream(messages, { temperature: 0.3, maxTokens: 2000 });
+    let fullAnswer = '';
+    let lastUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+
+    for await (const chunk of chatAdapter.chatStream(messages, { temperature: 0.3, maxTokens: 2000 })) {
+      fullAnswer += chunk.content;
+      if (chunk.usage) lastUsage = chunk.usage;
+      yield chunk;
+    }
+
+    // Log analytics after stream completes
+    const latencyMs = Date.now() - startTime;
+    this.eventEmitter.emit(
+      'query.completed',
+      new QueryCompletedEvent(params.tenantId, params.tenantDatabaseUrl, {
+        question: params.question,
+        answer: fullAnswer,
+        customerId: params.customerId,
+        sourceDocIds: mergedResults.map((r) => r.documentId),
+        searchLayers: [...new Set(mergedResults.map((r) => r.layer))],
+        confidence: mergedResults.length > 0 ? mergedResults[0].score : 0,
+        latencyMs,
+        tokenUsage: {
+          prompt: lastUsage.promptTokens,
+          completion: lastUsage.completionTokens,
+          total: lastUsage.totalTokens,
+        },
+        wasSuccessful: true,
+      }),
+    );
+
+    this.logger.log(`Stream query completed in ${latencyMs}ms, confidence: ${mergedResults.length > 0 ? mergedResults[0].score.toFixed(2) : '0.00'}`);
   }
 }
