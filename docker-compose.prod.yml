@@ -114,6 +114,37 @@ services:
     networks:
       - tino-network
 
+  embedding:
+    build:
+      context: ./embedding
+      dockerfile: Dockerfile
+    container_name: tino-wiki-embedding
+    restart: unless-stopped
+    environment:
+      MODEL_NAME: ${EMBEDDING_MODEL:-BAAI/bge-m3}
+      DEVICE: ${EMBEDDING_DEVICE:-cuda}
+      BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-32}
+      PORT: 8001
+    volumes:
+      - embedding_models:/app/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    expose:
+      - "8001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+      - tino-network
+
   # ===========================================
   # Application Services
   # ===========================================
@@ -162,9 +193,10 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-20250514}
 
-      # Embedding
-      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
-      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
+      # Embedding (BGE-M3 via local service)
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-vllm}
+      EMBEDDING_BASE_URL: http://embedding:8001
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1024}
 
       # AI Processing
       CHUNK_MIN_TOKENS: ${CHUNK_MIN_TOKENS:-300}
@@ -179,6 +211,8 @@ services:
       redis:
         condition: service_healthy
       qdrant:
+        condition: service_healthy
+      embedding:
         condition: service_healthy
     networks:
       - tino-network
@@ -327,6 +361,8 @@ volumes:
   qdrant_data:
     driver: local
   huggingface_cache:
+    driver: local
+  embedding_models:
     driver: local
   prometheus_data:
     driver: local
