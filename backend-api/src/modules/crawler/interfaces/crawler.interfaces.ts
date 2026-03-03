@@ -31,6 +31,8 @@ export interface CrawlSourceConfig {
   timeout?: number;
   /** Delay between requests in ms */
   delayMs?: number;
+  /** Number of days before a crawled URL is considered stale (default: 30) */
+  staleDays?: number;
   /** JSON field mapping for API source type */
   apiMapping?: {
     /** JSONPath to array of items (e.g., "$" for root array, "$.data.posts") */
@@ -46,11 +48,15 @@ export interface CrawlSourceConfig {
   };
 }
 
+export type CrawlMode = 'new_only' | 'recrawl_stale' | 'force_all';
+
 export interface CrawlJobData {
   sourceId: string;
   jobId: string;
   tenantId: string;
   tenantDatabaseUrl: string;
+  /** Crawl mode: new_only (default) = skip known URLs, recrawl_stale = re-fetch URLs older than staleDays, force_all = re-fetch everything */
+  mode?: CrawlMode;
 }
 
 export interface CrawlUrlJobData {

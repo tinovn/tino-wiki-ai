@@ -79,7 +79,13 @@ export class CrawlerController {
 
   @Post('sources/:id/crawl')
   async triggerCrawl(@Param('id') id: string, @Req() req: any) {
-    const job = await this.crawlerService.triggerCrawl(id, req.tenant?.id, req.tenant?.databaseUrl);
+    const job = await this.crawlerService.triggerCrawl(id, req.tenant?.id, req.tenant?.databaseUrl, 'new_only');
+    return ApiResponseDto.success(job);
+  }
+
+  @Post('sources/:id/recrawl')
+  async triggerRecrawl(@Param('id') id: string, @Req() req: any) {
+    const job = await this.crawlerService.triggerCrawl(id, req.tenant?.id, req.tenant?.databaseUrl, 'recrawl_stale');
     return ApiResponseDto.success(job);
   }
 

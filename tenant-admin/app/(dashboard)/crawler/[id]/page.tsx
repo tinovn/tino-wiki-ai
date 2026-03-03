@@ -6,7 +6,7 @@ import { Card, Descriptions, Tag, Table, Button, Space, App, Tabs, Spin, Typogra
 import { PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import PageHeader from '@/components/layout/PageHeader';
-import { useCrawlSource, useCrawlJobs, useTriggerCrawl, useCrawlJobResults } from '@/hooks/useCrawler';
+import { useCrawlSource, useCrawlJobs, useTriggerCrawl, useTriggerRecrawl, useCrawlJobResults } from '@/hooks/useCrawler';
 import type { CrawlJob, CrawlJobStatus, CrawlResult, CrawlResultStatus } from '@/types/crawler';
 
 const jobStatusColors: Record<CrawlJobStatus, string> = {
@@ -32,6 +32,7 @@ export default function CrawlSourceDetailPage() {
   const { data: source, isLoading: sourceLoading } = useCrawlSource(id);
   const { data: jobsData, isLoading: jobsLoading } = useCrawlJobs(id, jobPage);
   const triggerCrawl = useTriggerCrawl();
+  const triggerRecrawl = useTriggerRecrawl();
   const { data: resultsData, isLoading: resultsLoading } = useCrawlJobResults(
     selectedJobId || '',
     resultPage,
@@ -180,21 +181,37 @@ export default function CrawlSourceDetailPage() {
         </Descriptions>
 
         <div style={{ marginTop: 16 }}>
-          <Button
-            type="primary"
-            icon={<PlayCircleOutlined />}
-            loading={triggerCrawl.isPending}
-            onClick={async () => {
-              try {
-                await triggerCrawl.mutateAsync(source.id);
-                message.success('Crawl started');
-              } catch {
-                message.error('Failed to start crawl');
-              }
-            }}
-          >
-            Run Crawl Now
-          </Button>
+          <Space>
+            <Button
+              type="primary"
+              icon={<PlayCircleOutlined />}
+              loading={triggerCrawl.isPending}
+              onClick={async () => {
+                try {
+                  await triggerCrawl.mutateAsync(source.id);
+                  message.success('Crawl started (new URLs only)');
+                } catch {
+                  message.error('Failed to start crawl');
+                }
+              }}
+            >
+              Crawl New URLs
+            </Button>
+            <Button
+              icon={<ReloadOutlined />}
+              loading={triggerRecrawl.isPending}
+              onClick={async () => {
+                try {
+                  await triggerRecrawl.mutateAsync(source.id);
+                  message.success('Re-crawl started (stale URLs > 30 days)');
+                } catch {
+                  message.error('Failed to start re-crawl');
+                }
+              }}
+            >
+              Re-crawl Stale
+            </Button>
+          </Space>
         </div>
       </Card>
 

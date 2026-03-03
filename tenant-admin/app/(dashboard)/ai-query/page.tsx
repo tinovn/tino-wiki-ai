@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Card, Input, Button, Typography, Space, Tag, List, Divider, App, Empty } from 'antd';
+import { Card, Input, Button, Typography, Space, Tag, Divider, App, Empty, Checkbox, Tooltip } from 'antd';
 import { SendOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import PageHeader from '@/components/layout/PageHeader';
@@ -23,6 +23,7 @@ export default function AiQueryPage() {
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [useStreaming, setUseStreaming] = useState(true);
+  const [allowGeneralKnowledge, setAllowGeneralKnowledge] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { message: appMessage } = App.useApp();
 
@@ -44,7 +45,7 @@ export default function AiQueryPage() {
     if (useStreaming) {
       try {
         reset();
-        const fullText = await stream({ question: q });
+        const fullText = await stream({ question: q, allowGeneralKnowledge });
         setMessages((prev) => [
           ...prev,
           { role: 'assistant', content: fullText || 'No response' },
@@ -54,7 +55,7 @@ export default function AiQueryPage() {
       }
     } else {
       try {
-        const result = await aiQuery.mutateAsync({ question: q });
+        const result = await aiQuery.mutateAsync({ question: q, allowGeneralKnowledge });
         setMessages((prev) => [
           ...prev,
           {
@@ -77,13 +78,23 @@ export default function AiQueryPage() {
         title="AI Query"
         subtitle="Test the AI knowledge engine"
         filters={
-          <Button
-            size="small"
-            type={useStreaming ? 'primary' : 'default'}
-            onClick={() => setUseStreaming(!useStreaming)}
-          >
-            {useStreaming ? 'Streaming ON' : 'Streaming OFF'}
-          </Button>
+          <Space>
+            <Tooltip title="Khi bật, AI sẽ trả lời từ kiến thức chung nếu không tìm thấy trong tài liệu">
+              <Checkbox
+                checked={allowGeneralKnowledge}
+                onChange={(e) => setAllowGeneralKnowledge(e.target.checked)}
+              >
+                Kiến thức chung
+              </Checkbox>
+            </Tooltip>
+            <Button
+              size="small"
+              type={useStreaming ? 'primary' : 'default'}
+              onClick={() => setUseStreaming(!useStreaming)}
+            >
+              {useStreaming ? 'Streaming ON' : 'Streaming OFF'}
+            </Button>
+          </Space>
         }
       />
 

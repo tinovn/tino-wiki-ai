@@ -7,6 +7,7 @@ import { CreateDocumentDto } from '../dto/create-document.dto';
 import { UpdateDocumentDto } from '../dto/update-document.dto';
 import { DocumentQueryDto } from '../dto/document-query.dto';
 import { DocumentPublishedEvent } from '@core/event-bus/events/document-published.event';
+import { VectorStoreService } from '@modules/vector-store/vector-store.service';
 import { generateSlug } from '@common/utils';
 
 @Injectable()
@@ -17,6 +18,7 @@ export class DocumentService {
     private readonly documentRepo: DocumentRepository,
     private readonly versionRepo: VersionRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly vectorStore: VectorStoreService,
   ) {}
 
   async create(dto: CreateDocumentDto, authorId: string) {
@@ -116,14 +118,36 @@ export class DocumentService {
     return this.documentRepo.findById(id);
   }
 
-  async unpublish(id: string) {
+  async unpublish(id: string, tenantSlug?: string) {
     await this.findById(id);
     await this.documentRepo.update(id, { status: 'DRAFT', publishedAt: null });
+
+    // Xóa vector khỏi Qdrant khi unpublish
+    if (tenantSlug) {
+      try {
+        await this.vectorStore.deleteByDocumentId(tenantSlug, id);
+        this.logger.log(`Deleted vectors for unpublished document: ${id}`);
+      } catch (error) {
+        this.logger.warn(`Failed to delete vectors for document ${id}: ${error}`);
+      }
+    }
+
     return this.documentRepo.findById(id);
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, tenantSlug?: string) {
     await this.findById(id);
+
+    // Xóa vector khỏi Qdrant khi xóa document
+    if (tenantSlug) {
+      try {
+        await this.vectorStore.deleteByDocumentId(tenantSlug, id);
+        this.logger.log(`Deleted vectors for deleted document: ${id}`);
+      } catch (error) {
+        this.logger.warn(`Failed to delete vectors for document ${id}: ${error}`);
+      }
+    }
+
     return this.documentRepo.softDelete(id);
   }
 

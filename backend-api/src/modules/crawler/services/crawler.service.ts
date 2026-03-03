@@ -8,7 +8,7 @@ import { CrawlResultRepository } from '../repositories/crawl-result.repository';
 import { CreateCrawlSourceDto } from '../dto/create-crawl-source.dto';
 import { UpdateCrawlSourceDto } from '../dto/update-crawl-source.dto';
 import { CrawlSourceQueryDto } from '../dto/crawl-source-query.dto';
-import type { CrawlJobData } from '../interfaces/crawler.interfaces';
+import type { CrawlJobData, CrawlMode } from '../interfaces/crawler.interfaces';
 
 @Injectable()
 export class CrawlerService {
@@ -73,7 +73,7 @@ export class CrawlerService {
     return source;
   }
 
-  async triggerCrawl(sourceId: string, tenantId: string, tenantDatabaseUrl: string) {
+  async triggerCrawl(sourceId: string, tenantId: string, tenantDatabaseUrl: string, mode: CrawlMode = 'new_only') {
     const source = await this.findSourceById(sourceId);
     const job = await this.jobRepo.create(sourceId);
 
@@ -82,14 +82,17 @@ export class CrawlerService {
       jobId: job.id,
       tenantId,
       tenantDatabaseUrl,
+      mode,
     };
 
-    await this.crawlerQueue.add(JOBS.CRAWL_SOURCE, jobData, {
+    const jobName = mode === 'recrawl_stale' ? JOBS.RECRAWL_STALE : JOBS.CRAWL_SOURCE;
+
+    await this.crawlerQueue.add(jobName, jobData, {
       attempts: 2,
       backoff: { type: 'exponential', delay: 5000 },
     });
 
-    this.logger.log(`Triggered crawl for source: ${source.name}, job: ${job.id}`);
+    this.logger.log(`Triggered crawl [${mode}] for source: ${source.name}, job: ${job.id}`);
     return job;
   }
 

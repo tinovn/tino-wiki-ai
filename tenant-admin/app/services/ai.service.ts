@@ -55,4 +55,13 @@ export const aiService = {
     const res = await apiClient.get<ApiResponse<AiJobStatus>>(`/ai/jobs/${jobId}`);
     return res.data.data;
   },
+
+  async getSettings(): Promise<{ allowGeneralKnowledge: boolean }> {
+    const res = await apiClient.get<ApiResponse<{ allowGeneralKnowledge: boolean }>>('/ai/settings');
+    return res.data.data;
+  },
+
+  async updateSettings(data: { allowGeneralKnowledge?: boolean }): Promise<void> {
+    await apiClient.patch('/ai/settings', data);
+  },
 };

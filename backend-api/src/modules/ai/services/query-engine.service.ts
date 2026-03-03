@@ -31,6 +31,7 @@ export class QueryEngineService {
     customerId?: string;
     customerMemory?: Array<{ type: string; key: string; value: string }>;
     provider?: string;
+    allowGeneralKnowledge?: boolean;
   }): Promise<QueryResult> {
     const startTime = Date.now();
 
@@ -83,6 +84,7 @@ export class QueryEngineService {
       params.question,
       mergedResults,
       params.customerMemory,
+      { allowGeneralKnowledge: params.allowGeneralKnowledge },
     );
 
     // Step 5: Call LLM
@@ -149,6 +151,7 @@ export class QueryEngineService {
     customerId?: string;
     customerMemory?: Array<{ type: string; key: string; value: string }>;
     provider?: string;
+    allowGeneralKnowledge?: boolean;
   }): AsyncIterable<ChatStreamChunk> {
     let mergedResults: any[] = [];
 
@@ -184,7 +187,12 @@ export class QueryEngineService {
     }
 
     // Build prompt (works with empty context too)
-    const messages = this.promptBuilder.build(params.question, mergedResults, params.customerMemory);
+    const messages = this.promptBuilder.build(
+      params.question,
+      mergedResults,
+      params.customerMemory,
+      { allowGeneralKnowledge: params.allowGeneralKnowledge },
+    );
 
     // Stream LLM response
     const chatAdapter = this.llmFactory.getChatAdapter(params.provider);

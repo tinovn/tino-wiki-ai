@@ -2,6 +2,7 @@ export interface AiQueryRequest {
   question: string;
   customerId?: string;
   conversationId?: string;
+  allowGeneralKnowledge?: boolean;
 }
 
 export interface AiSource {

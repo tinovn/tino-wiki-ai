@@ -57,6 +57,17 @@ export function useTriggerCrawl() {
   });
 }
 
+export function useTriggerRecrawl() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sourceId: string) => crawlerService.triggerRecrawl(sourceId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [QUERY_KEYS.CRAWL_SOURCES] });
+      qc.invalidateQueries({ queryKey: [QUERY_KEYS.CRAWL_JOBS] });
+    },
+  });
+}
+
 export function useCrawlJobs(sourceId: string, page = 1, limit = 20) {
   return useQuery({
     queryKey: [QUERY_KEYS.CRAWL_JOBS, sourceId, page, limit],

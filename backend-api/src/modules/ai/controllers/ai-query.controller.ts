@@ -1,25 +1,66 @@
-import { Controller, Post, Get, Param, Body, Req, Res } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Req, Res } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { QueryEngineService } from '../services/query-engine.service';
 import { AiQueryDto } from '../dto/ai-query.dto';
 import { ApiResponseDto } from '@common/dto';
+import { PrismaService } from '@core/database/prisma/prisma.service';
+import { Roles } from '@common/decorators';
 
 @ApiTags('AI')
 @ApiBearerAuth()
 @Controller('ai')
 export class AiQueryController {
-  constructor(private readonly queryEngine: QueryEngineService) {}
+  constructor(
+    private readonly queryEngine: QueryEngineService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  @Get('settings')
+  async getSettings(@Req() req: any) {
+    const tenant = req.tenant || {};
+    const settings = tenant.settings || {};
+    return ApiResponseDto.success({
+      allowGeneralKnowledge: settings.ai?.allowGeneralKnowledge ?? false,
+    });
+  }
+
+  @Patch('settings')
+  @Roles('ADMIN')
+  async updateSettings(@Body() body: { allowGeneralKnowledge?: boolean }, @Req() req: any) {
+    const tenantId = req.tenant?.id;
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    const currentSettings = (typeof tenant!.settings === 'string'
+      ? JSON.parse(tenant!.settings)
+      : tenant!.settings) || {};
+
+    currentSettings.ai = {
+      ...currentSettings.ai,
+      ...(body.allowGeneralKnowledge !== undefined && { allowGeneralKnowledge: body.allowGeneralKnowledge }),
+    };
+
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { settings: currentSettings },
+    });
+
+    return ApiResponseDto.success(currentSettings.ai);
+  }
 
   @Post('query')
   async query(@Body() dto: AiQueryDto, @Req() req: any) {
     const tenant = req.tenant || {};
+
+    // Admin/staff gửi dto.allowGeneralKnowledge → override tenant setting
+    const allowGeneral = dto.allowGeneralKnowledge ?? false;
+
     const result = await this.queryEngine.query({
       tenantId: tenant.id || req.headers['x-tenant-id'],
       tenantSlug: tenant.slug || 'default',
       tenantDatabaseUrl: tenant.databaseUrl || '',
       question: dto.question,
       customerId: dto.customerId,
+      allowGeneralKnowledge: allowGeneral,
     });
 
     return ApiResponseDto.success(result);
@@ -28,6 +69,9 @@ export class AiQueryController {
   @Post('query/stream')
   async queryStream(@Body() dto: AiQueryDto, @Req() req: any, @Res() res: Response) {
     const tenant = req.tenant || {};
+
+    // Admin/staff gửi dto.allowGeneralKnowledge → override tenant setting
+    const allowGeneral = dto.allowGeneralKnowledge ?? false;
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -40,6 +84,7 @@ export class AiQueryController {
         tenantDatabaseUrl: tenant.databaseUrl || '',
         question: dto.question,
         customerId: dto.customerId,
+        allowGeneralKnowledge: allowGeneral,
       });
 
       for await (const chunk of stream) {

@@ -20,5 +20,6 @@ export const JOBS = {
   ANALYZE_CONTENT_GAPS: 'analyze-content-gaps',
   CRAWL_SOURCE: 'crawl-source',
   CRAWL_URL: 'crawl-url',
+  RECRAWL_STALE: 'recrawl-stale',
   SCHEDULED_CRAWL: 'scheduled-crawl',
 } as const;

@@ -5,6 +5,7 @@ import { MasterVersionRepository } from '../repositories/master-version.reposito
 import { CreateMasterDocumentDto } from '../dto/create-master-document.dto';
 import { UpdateMasterDocumentDto } from '../dto/update-master-document.dto';
 import { MasterDocumentQueryDto } from '../dto/master-document-query.dto';
+import { VectorStoreService } from '@modules/vector-store/vector-store.service';
 import { generateSlug } from '@common/utils';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class MasterDocumentService {
     private readonly documentRepo: MasterDocumentRepository,
     private readonly versionRepo: MasterVersionRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly vectorStore: VectorStoreService,
   ) {}
 
   async create(dto: CreateMasterDocumentDto, authorId: string) {
@@ -114,11 +116,29 @@ export class MasterDocumentService {
   async unpublish(id: string) {
     await this.findById(id);
     await this.documentRepo.update(id, { status: 'DRAFT', publishedAt: null });
+
+    // Xóa vector khỏi Qdrant khi unpublish
+    try {
+      await this.vectorStore.deleteByDocumentId('master', id);
+      this.logger.log(`Deleted vectors for unpublished master document: ${id}`);
+    } catch (error) {
+      this.logger.warn(`Failed to delete vectors for master document ${id}: ${error}`);
+    }
+
     return this.documentRepo.findById(id);
   }
 
   async softDelete(id: string) {
     await this.findById(id);
+
+    // Xóa vector khỏi Qdrant khi xóa document
+    try {
+      await this.vectorStore.deleteByDocumentId('master', id);
+      this.logger.log(`Deleted vectors for deleted master document: ${id}`);
+    } catch (error) {
+      this.logger.warn(`Failed to delete vectors for master document ${id}: ${error}`);
+    }
+
     return this.documentRepo.softDelete(id);
   }
 

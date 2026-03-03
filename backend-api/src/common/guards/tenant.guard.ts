@@ -82,6 +82,7 @@ export class TenantGuard implements CanActivate {
       databaseUrl: tenant.databaseUrl,
       llmProvider: tenant.llmProvider,
       llmConfig: typeof tenant.llmConfig === 'string' ? JSON.parse(tenant.llmConfig) : (tenant.llmConfig || {}),
+      settings: typeof tenant.settings === 'string' ? JSON.parse(tenant.settings) : (tenant.settings || {}),
       status: tenant.status,
     };
 

@@ -45,8 +45,8 @@ export class DocumentController {
 
   @Delete(':id')
   @Roles('ADMIN', 'EDITOR')
-  async delete(@Param('id') id: string) {
-    await this.documentService.softDelete(id);
+  async delete(@Param('id') id: string, @Req() req: any) {
+    await this.documentService.softDelete(id, req.tenant?.slug);
     return ApiResponseDto.success({ deleted: true });
   }
 
@@ -59,8 +59,8 @@ export class DocumentController {
 
   @Post(':id/unpublish')
   @Roles('ADMIN', 'EDITOR')
-  async unpublish(@Param('id') id: string) {
-    const doc = await this.documentService.unpublish(id);
+  async unpublish(@Param('id') id: string, @Req() req: any) {
+    const doc = await this.documentService.unpublish(id, req.tenant?.slug);
     return ApiResponseDto.success(doc);
   }
 

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { load } from 'cheerio';
-import TurndownService from 'turndown';
+import * as TurndownService from 'turndown';
 import type { ExtractedContent, CrawlSourceConfig } from '../interfaces/crawler.interfaces';
 
 type ApiMapping = NonNullable<CrawlSourceConfig['apiMapping']>;

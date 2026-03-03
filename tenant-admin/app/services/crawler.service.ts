@@ -41,6 +41,11 @@ export const crawlerService = {
     return res.data.data;
   },
 
+  async triggerRecrawl(sourceId: string): Promise<CrawlJob> {
+    const res = await apiClient.post<ApiResponse<CrawlJob>>(`/crawler/sources/${sourceId}/recrawl`);
+    return res.data.data;
+  },
+
   // Jobs
   async getJobs(sourceId: string, page = 1, limit = 20): Promise<ApiResponse<CrawlJob[]>> {
     const res = await apiClient.get<ApiResponse<CrawlJob[]>>(`/crawler/sources/${sourceId}/jobs`, {

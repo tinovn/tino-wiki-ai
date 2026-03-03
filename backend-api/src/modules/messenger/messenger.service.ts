@@ -58,7 +58,7 @@ export class MessengerService {
   }
 
   private async processMessage(
-    tenant: { id: string; slug: string; databaseUrl: string },
+    tenant: { id: string; slug: string; databaseUrl: string; settings: any },
     config: MessengerConfig,
     messaging: FbMessaging,
   ): Promise<void> {
@@ -112,6 +112,9 @@ export class MessengerService {
         where: { customerId: customer.id },
       });
 
+      const tenantSettings = (tenant.settings as any) || {};
+      const aiSettings = tenantSettings.ai || {};
+
       const result = await this.queryEngine.query({
         tenantId: tenant.id,
         tenantSlug: tenant.slug,
@@ -123,6 +126,7 @@ export class MessengerService {
           key: m.key,
           value: m.value,
         })),
+        allowGeneralKnowledge: aiSettings.allowGeneralKnowledge ?? false,
       });
 
       // Strip markdown for FB (basic: remove **, ##, etc.)

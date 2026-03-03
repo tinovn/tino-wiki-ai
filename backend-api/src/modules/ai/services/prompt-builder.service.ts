@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { QUERY_SYSTEM_PROMPT, QUERY_USER_PROMPT } from '@modules/llm/prompts/query-answer.prompts';
+import { QUERY_SYSTEM_PROMPT_STRICT, QUERY_SYSTEM_PROMPT_GENERAL, QUERY_USER_PROMPT } from '@modules/llm/prompts/query-answer.prompts';
 import { MergedSearchResult } from '../interfaces/search-result.interface';
 import { ChatMessage } from '@modules/llm/interfaces/llm-adapter.interface';
 
@@ -9,6 +9,7 @@ export class PromptBuilderService {
     question: string,
     results: MergedSearchResult[],
     customerMemory?: Array<{ type: string; key: string; value: string }>,
+    options?: { allowGeneralKnowledge?: boolean },
   ): ChatMessage[] {
     // Build context from search results
     const context = results
@@ -32,8 +33,13 @@ export class PromptBuilderService {
       .replace('{customerMemory}', memoryStr)
       .replace('{question}', question);
 
+    // Chọn system prompt dựa trên setting
+    const systemPrompt = options?.allowGeneralKnowledge
+      ? QUERY_SYSTEM_PROMPT_GENERAL
+      : QUERY_SYSTEM_PROMPT_STRICT;
+
     return [
-      { role: 'system' as const, content: QUERY_SYSTEM_PROMPT },
+      { role: 'system' as const, content: systemPrompt },
       { role: 'user' as const, content: userContent },
     ];
   }
