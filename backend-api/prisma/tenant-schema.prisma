@@ -2,8 +2,9 @@
 // Each tenant gets their own PostgreSQL database with this schema
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/tenant-client"
+  provider      = "prisma-client-js"
+  output        = "../node_modules/.prisma/tenant-client"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {

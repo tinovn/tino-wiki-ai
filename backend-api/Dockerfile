@@ -30,7 +30,7 @@ RUN npm prune --omit=dev
 # ============================================
 FROM node:20-alpine AS production
 
-RUN apk add --no-cache tini openssl1.1-compat
+RUN apk add --no-cache tini
 
 WORKDIR /app
 
