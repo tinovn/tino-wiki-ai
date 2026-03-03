@@ -515,7 +515,7 @@ body {
 }
 
 .conv-badge {
-  background: #1677ff;
+  background: #52c41a;
   color: #fff;
   font-size: 11px;
   font-weight: 600;
@@ -527,6 +527,79 @@ body {
   justify-content: center;
   padding: 0 6px;
   flex-shrink: 0;
+}
+
+/* ─── Sidebar Header (Subiz) ─── */
+
+.conv-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 12px 8px;
+}
+
+.conv-sidebar-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.conv-filter-pill {
+  border-radius: 16px;
+  font-size: 12px;
+  padding: 0 12px;
+  height: 26px;
+}
+
+.conv-filter-active {
+  color: #1677ff;
+}
+
+/* ─── Avatar Channel Icon Overlay ─── */
+
+.conv-avatar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.conv-avatar-channel-icon {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  border: 2px solid #fff;
+  font-size: 10px;
+}
+
+/* ─── Conversation List Labels ─── */
+
+.conv-labels-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.conv-label-tag {
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+.conv-preview-agent {
+  font-weight: 600;
+  color: #666;
 }
 
 /* ─── Chat Area ─── */
@@ -547,6 +620,142 @@ body {
   border-bottom: 1px solid #ddd;
   flex-shrink: 0;
   background: #fff;
+}
+
+/* ─── Chat Header (Subiz) ─── */
+
+.chat-header-subiz {
+  flex-shrink: 0;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.chat-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+}
+
+.chat-header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-header-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.chat-header-subtitle {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.chat-header-agent-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #f0f0f0;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #555;
+}
+
+.chat-status-btn {
+  border-radius: 16px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot-open {
+  background: #52c41a;
+}
+
+.status-dot-closed {
+  background: #999;
+}
+
+/* ─── Chat Labels Bar ─── */
+
+.chat-labels-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 16px 8px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+}
+
+.chat-label-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.chat-label-remove {
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.chat-label-remove:hover {
+  opacity: 1;
+}
+
+.chat-label-add {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px dashed #d9d9d9;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #999;
+  cursor: pointer;
+  background: transparent;
+  padding: 0;
+}
+
+.chat-label-add:hover {
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+.label-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
 }
 
 .message-list {
@@ -659,6 +868,25 @@ body {
 .msg-row-right .bubble-mid   { border-radius: 12px 4px 4px 12px; }
 .msg-row-right .bubble-last  { border-radius: 12px 4px 12px 12px; }
 
+/* ─── Message Sender Labels (Subiz) ─── */
+
+.msg-sender-label {
+  font-size: 11px;
+  color: #888;
+  padding: 8px 0 2px;
+}
+
+.msg-sender-left {
+  align-self: flex-start;
+  margin-left: 38px;
+}
+
+.msg-sender-right {
+  align-self: flex-end;
+  margin-right: 38px;
+  text-align: right;
+}
+
 /* ─── System Message ─── */
 
 .msg-system {
@@ -740,13 +968,72 @@ body {
   padding: 8px 0;
 }
 
-/* ─── Composer ─── */
+/* ─── Composer (Subiz) ─── */
 
 .composer-bar {
-  border-top: 1px solid #ddd;
-  padding: 12px;
+  border-top: 1px solid #e8e8e8;
   flex-shrink: 0;
   background: #fff;
+}
+
+.composer-mode-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.composer-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #888;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.composer-tab:hover {
+  color: #333;
+}
+
+.composer-tab-active {
+  color: #1677ff;
+  border-bottom-color: #1677ff;
+}
+
+.composer-tab-note.composer-tab-active {
+  color: #fa8c16;
+  border-bottom-color: #fa8c16;
+}
+
+.composer-textarea {
+  padding: 10px 16px;
+}
+
+.composer-textarea-note {
+  background: #fffbe6;
+}
+
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-top: 1px solid #f5f5f5;
+}
+
+.composer-toolbar-left {
+  display: flex;
+  gap: 2px;
+}
+
+.composer-ai-btn {
+  color: #722ed1;
+}
+
+.composer-send-btn {
+  border-radius: 16px;
+  padding: 0 16px;
 }
 
 /* ─── AI Suggestion Preview Card ─── */
@@ -785,7 +1072,7 @@ body {
   justify-content: flex-end;
 }
 
-/* ─── Customer Details Panel ─── */
+/* ─── Customer Details Panel (Subiz) ─── */
 
 .inbox-details {
   width: 340px;
@@ -793,6 +1080,112 @@ body {
   overflow-y: auto;
   flex-shrink: 0;
   background: #fff;
+}
+
+.detail-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 16px 12px;
+}
+
+.detail-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.detail-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.detail-section {
+  padding: 12px 16px;
+}
+
+.detail-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 8px;
+}
+
+.detail-section-action {
+  cursor: pointer;
+  color: #1677ff;
+  font-size: 14px;
+}
+
+.detail-section-action:hover {
+  color: #4096ff;
+}
+
+.detail-section-link {
+  cursor: pointer;
+  color: #1677ff;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.detail-section-link:hover {
+  text-decoration: underline;
+}
+
+.detail-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  font-size: 13px;
+}
+
+.detail-placeholder {
+  color: #bbb;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.detail-note-item {
+  padding: 6px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.detail-note-meta {
+  font-size: 10px;
+  color: #999;
+  margin-bottom: 2px;
+}
+
+.detail-note-content {
+  font-size: 12px;
+  color: #333;
+}
+
+.detail-memory-item {
+  padding: 6px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.detail-related-item {
+  padding: 6px 0;
+  border-bottom: 1px solid #f5f5f5;
+  cursor: pointer;
+}
+
+.detail-related-item:hover {
+  background: #fafafa;
 }
 
 /* ─── Responsive ─── */

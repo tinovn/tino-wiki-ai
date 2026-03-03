@@ -89,6 +89,7 @@ services:
       VLLM_ATTENTION_BACKEND: XFORMERS
     command: >
       --model ${VLLM_MODEL:-Qwen/Qwen2.5-72B-Instruct-GPTQ-Int4}
+      --served-model-name tino-wiki
       --tensor-parallel-size 2
       --gpu-memory-utilization 0.90
       --max-model-len 16384
@@ -178,7 +179,7 @@ services:
       # LLM
       LLM_DEFAULT_PROVIDER: ${LLM_DEFAULT_PROVIDER:-vllm}
       VLLM_BASE_URL: http://vllm:8000/v1
-      VLLM_MODEL: ${VLLM_MODEL:-Qwen/Qwen2.5-72B-Instruct-GPTQ-Int4}
+      VLLM_MODEL: ${VLLM_MODEL:-tino-wiki}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
 
       # LLM Fallbacks

@@ -1,8 +1,16 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Input, Button, Segmented, Spin, Tag, message as antMessage } from 'antd';
-import { SendOutlined, RobotOutlined, CloseOutlined } from '@ant-design/icons';
+import { Input, Button, Spin, Tag, message as antMessage } from 'antd';
+import {
+  SendOutlined,
+  RobotOutlined,
+  CloseOutlined,
+  SmileOutlined,
+  PictureOutlined,
+  PaperClipOutlined,
+  CodeOutlined,
+} from '@ant-design/icons';
 import { useSendAgentMessage, useAiSuggestion, useAddNote } from '@/hooks/useConversations';
 import { emitTyping } from '@/services/websocket.service';
 import type { InboxMessage } from '@/types/conversation';
@@ -112,8 +120,9 @@ export default function MessageComposer({ conversationId, isHandoff, latestMessa
 
   return (
     <div className="composer-bar">
+      {/* AI Suggestion card */}
       {suggestionData && (
-        <div className="ai-suggestion-card">
+        <div className="ai-suggestion-card" style={{ margin: '12px 12px 0' }}>
           <div className="ai-suggestion-header">
             <span><RobotOutlined /> Gợi ý AI</span>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -140,46 +149,66 @@ export default function MessageComposer({ conversationId, isHandoff, latestMessa
           </div>
         </div>
       )}
-      <Segmented
-        size="small"
-        value={mode}
-        onChange={(val) => setMode(val as 'reply' | 'note')}
-        options={[
-          { label: 'Trả lời', value: 'reply' },
-          { label: 'Ghi chú', value: 'note' },
-        ]}
-        style={{ marginBottom: 8 }}
+
+      {/* Mode tabs */}
+      <div className="composer-mode-tabs">
+        <span
+          className={`composer-tab ${mode === 'reply' ? 'composer-tab-active' : ''}`}
+          onClick={() => setMode('reply')}
+        >
+          Trả lời
+        </span>
+        <span
+          className={`composer-tab ${mode === 'note' ? 'composer-tab-active composer-tab-note' : ''}`}
+          onClick={() => setMode('note')}
+        >
+          Ghi chú
+        </span>
+      </div>
+
+      {/* TextArea */}
+      <TextArea
+        value={content}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        placeholder={
+          mode === 'reply'
+            ? "Nhập '/' để chọn tin nhắn mẫu, '@' để sử dụng câu lệnh nhanh"
+            : 'Ghi chú nội bộ...'
+        }
+        autoSize={{ minRows: 2, maxRows: 6 }}
+        className={`composer-textarea ${mode === 'note' ? 'composer-textarea-note' : ''}`}
+        variant="borderless"
       />
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-        <TextArea
-          value={content}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder={mode === 'reply' ? 'Nhập tin nhắn... (Enter để gửi)' : 'Ghi chú nội bộ...'}
-          autoSize={{ minRows: 1, maxRows: 5 }}
-          style={{
-            flex: 1,
-            background: mode === 'note' ? '#fffbe6' : undefined,
-            borderColor: mode === 'note' ? '#ffe58f' : undefined,
-          }}
-        />
-        <div style={{ display: 'flex', gap: 4 }}>
+
+      {/* Bottom toolbar */}
+      <div className="composer-toolbar">
+        <div className="composer-toolbar-left">
+          <Button type="text" size="small" icon={<SmileOutlined />} title="Emoji" disabled />
+          <Button type="text" size="small" icon={<PictureOutlined />} title="Hình ảnh" disabled />
+          <Button type="text" size="small" icon={<PaperClipOutlined />} title="Tệp đính kèm" disabled />
+          <Button type="text" size="small" icon={<CodeOutlined />} title="Đoạn mã" disabled />
           {mode === 'reply' && (
             <Button
+              type="text"
+              size="small"
               icon={aiSuggestion.isPending ? <Spin size="small" /> : <RobotOutlined />}
               onClick={handleAiSuggest}
               disabled={aiSuggestion.isPending}
               title="AI Gợi ý"
+              className="composer-ai-btn"
             />
           )}
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={handleSend}
-            loading={isSending}
-            disabled={!content.trim()}
-          />
         </div>
+        <Button
+          type="primary"
+          size="small"
+          icon={<SendOutlined />}
+          onClick={handleSend}
+          loading={isSending}
+          disabled={!content.trim()}
+          className="composer-send-btn"
+        />
       </div>
     </div>
   );

@@ -43,10 +43,25 @@ export class TenantGuard implements CanActivate {
     // SuperAdmin scope bypasses tenant requirement
     if (user?.scope === 'superadmin') return true;
 
-    // For tenant-scoped users, x-tenant-id header is required
-    const headerTenantId = request.headers['x-tenant-id'];
+    // Resolve tenant ID: from header, or from subdomain slug (injected by nginx as X-Tenant-Slug)
+    let headerTenantId = request.headers['x-tenant-id'];
+    const tenantSlug = request.headers['x-tenant-slug'] as string;
+
+    // If no explicit tenant ID but we have a slug from subdomain, resolve it
+    let tenant: any;
+    if (!headerTenantId && tenantSlug) {
+      tenant = await this.prisma.tenant.findFirst({
+        where: { slug: tenantSlug, status: 'ACTIVE' },
+      });
+      if (tenant) {
+        headerTenantId = tenant.id;
+        // Inject resolved tenant ID into headers for downstream compatibility
+        request.headers['x-tenant-id'] = tenant.id;
+      }
+    }
+
     if (!headerTenantId) {
-      throw new BadRequestException('x-tenant-id header is required');
+      throw new BadRequestException('x-tenant-id header or tenant subdomain is required');
     }
 
     // CRITICAL: Validate JWT tenantId matches header tenantId
@@ -62,10 +77,12 @@ export class TenantGuard implements CanActivate {
       throw new ForbiddenException('Access denied: tenant mismatch');
     }
 
-    // Resolve tenant from master DB
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: headerTenantId },
-    });
+    // Resolve tenant from master DB (skip if already resolved from slug above)
+    if (!tenant) {
+      tenant = await this.prisma.tenant.findUnique({
+        where: { id: headerTenantId },
+      });
+    }
 
     if (!tenant) {
       throw new ForbiddenException('Tenant not found');

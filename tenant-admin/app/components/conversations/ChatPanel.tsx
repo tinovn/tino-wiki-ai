@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
-import { Typography, Tag, Button, Space, Spin, Empty, Dropdown, message as antMessage } from 'antd';
+import { Button, Spin, Empty, Dropdown, message as antMessage } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   CloseCircleOutlined,
-  CheckCircleOutlined,
   FacebookOutlined,
   SendOutlined,
   MessageOutlined,
@@ -13,21 +12,23 @@ import {
   LogoutOutlined,
   SwapOutlined,
   RobotOutlined,
-  TeamOutlined,
+  MoreOutlined,
+  PlusOutlined,
+  StopOutlined,
+  BellOutlined,
 } from '@ant-design/icons';
-import { useConversation, useConversationMessages, useCloseConversation, useReopenConversation, useAssignConversation, useUnassignConversation, useResumeAi, INBOX_KEY } from '@/hooks/useConversations';
+import { useConversation, useConversationMessages, useCloseConversation, useReopenConversation, useAssignConversation, useUnassignConversation, useResumeAi, useUpdateConversation, INBOX_KEY } from '@/hooks/useConversations';
 import { useConversationSocket } from '@/hooks/useWebSocket';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/providers/AuthProvider';
 import { useUsers } from '@/hooks/useUsers';
 import { conversationsService } from '@/services/conversations.service';
 import { groupMessages } from '@/utils/message-grouping';
+import { getLabelColor, AVAILABLE_LABELS } from '@/utils/label-utils';
 import MessageGroupBubble from './MessageBubble';
 import DateSeparator from './DateSeparator';
 import TypingIndicator from './TypingIndicator';
 import MessageComposer from './MessageComposer';
-
-const { Title } = Typography;
 
 const CHANNEL_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   messenger: { label: 'Messenger', icon: <FacebookOutlined />, color: '#1877F2' },
@@ -64,6 +65,7 @@ export default function ChatPanel({ conversationId }: Props) {
   const assignConv = useAssignConversation();
   const unassignConv = useUnassignConversation();
   const resumeAi = useResumeAi();
+  const updateConv = useUpdateConversation();
   const { user: currentUser } = useAuth();
   const { data: usersData } = useUsers({ limit: 100 });
 
@@ -178,25 +180,15 @@ export default function ChatPanel({ conversationId }: Props) {
   const customerName = conversation?.customer?.name || conversation?.customer?.email || 'Khách';
   const isAssignedToMe = conversation?.assignedAgentId === currentUser?.sub;
   const agents = (usersData?.data ?? []).filter((u) => u.isActive);
+  const currentLabels = conversation?.labels || [];
 
-  // Build agent action menu items
-  const agentMenuItems: MenuProps['items'] = [
-    // Leave — only when assigned to me
-    ...(isAssignedToMe ? [{
-      key: 'leave',
-      icon: <LogoutOutlined />,
-      label: 'Rời đi',
-      onClick: () => {
-        unassignConv.mutate(conversationId!, {
-          onSuccess: () => antMessage.success('Đã rời khỏi hội thoại'),
-        });
-      },
-    }] : []),
+  // Build "..." more menu items (Subiz style)
+  const moreMenuItems: MenuProps['items'] = [
     // Transfer to another agent
-    {
+    ...(conversation?.status === 'ACTIVE' ? [{
       key: 'transfer',
       icon: <SwapOutlined />,
-      label: 'Chuyển nhân viên',
+      label: 'Chia lại chat',
       children: agents
         .filter((a) => a.id !== conversation?.assignedAgentId)
         .map((agent) => ({
@@ -209,7 +201,18 @@ export default function ChatPanel({ conversationId }: Props) {
             );
           },
         })),
-    },
+    }] : []),
+    // Leave — only when assigned to me
+    ...(isAssignedToMe ? [{
+      key: 'leave',
+      icon: <LogoutOutlined />,
+      label: 'Rời đi',
+      onClick: () => {
+        unassignConv.mutate(conversationId!, {
+          onSuccess: () => antMessage.success('Đã rời khỏi hội thoại'),
+        });
+      },
+    }] : []),
     // Resume AI — only when in handoff
     ...(conversation?.isHandoff ? [{
       key: 'resume-ai',
@@ -221,48 +224,102 @@ export default function ChatPanel({ conversationId }: Props) {
         });
       },
     }] : []),
+    { type: 'divider' as const },
+    { key: 'spam', icon: <StopOutlined />, label: 'Đánh dấu SPAM', disabled: true },
+    { key: 'mute', icon: <BellOutlined />, label: 'Tắt thông báo hội thoại', disabled: true },
   ];
+
+  // Build label add dropdown items
+  const labelAddItems: MenuProps['items'] = AVAILABLE_LABELS
+    .filter((l) => !currentLabels.includes(l))
+    .map((l) => ({
+      key: l,
+      label: (
+        <span>
+          <span className="label-dot" style={{ background: getLabelColor(l) }} />
+          {l}
+        </span>
+      ),
+      onClick: () => {
+        updateConv.mutate({ conversationId: conversationId!, data: { labels: [...currentLabels, l] } });
+      },
+    }));
 
   return (
     <div className="inbox-chat">
-      <div className="chat-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-          <Title level={5} style={{ margin: 0 }}>{customerName}</Title>
-          <Tag icon={channelInfo.icon} color={channelInfo.color}>{channelInfo.label}</Tag>
-          {conversation?.isHandoff && <Tag color="warning">Handoff</Tag>}
-          {conversation?.assignedAgent && (
-            <Tag color="blue">{conversation.assignedAgent.displayName}</Tag>
-          )}
-          {conversation?.status === 'CLOSED' && <Tag color="default">Đã đóng</Tag>}
-        </div>
-        <Space>
-          {conversation?.status === 'ACTIVE' && agentMenuItems.length > 0 && (
-            <Dropdown menu={{ items: agentMenuItems }} trigger={['click']} placement="bottomRight">
-              <Button size="small" icon={<TeamOutlined />}>
-                Quản lý
+      {/* Subiz-style header */}
+      <div className="chat-header-subiz">
+        <div className="chat-header-top">
+          <div className="chat-header-info">
+            <div className="chat-header-name">{customerName}</div>
+            <div className="chat-header-subtitle">
+              {channelInfo.icon} {channelInfo.label}
+              {conversation?.customer?.email && ` · ${conversation.customer.email}`}
+              {conversation?.customer?.externalId && !conversation?.customer?.email && ` · ${conversation.customer.externalId}`}
+            </div>
+          </div>
+          <div className="chat-header-actions">
+            {conversation?.assignedAgent && (
+              <span className="chat-header-agent-badge">
+                {conversation.assignedAgent.displayName}
+              </span>
+            )}
+            {conversation?.status === 'ACTIVE' ? (
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'close',
+                      icon: <CloseCircleOutlined />,
+                      label: 'Đóng hội thoại',
+                      onClick: () => closeConv.mutate(conversationId!),
+                    },
+                  ],
+                }}
+                trigger={['click']}
+              >
+                <Button size="small" className="chat-status-btn">
+                  <span className="status-dot status-dot-open" /> Đang mở
+                </Button>
+              </Dropdown>
+            ) : (
+              <Button
+                size="small"
+                className="chat-status-btn"
+                onClick={() => reopenConv.mutate(conversationId!)}
+                loading={reopenConv.isPending}
+              >
+                <span className="status-dot status-dot-closed" /> Đã đóng
               </Button>
+            )}
+            <Dropdown menu={{ items: moreMenuItems }} trigger={['click']} placement="bottomRight">
+              <Button size="small" type="text" icon={<MoreOutlined />} />
             </Dropdown>
-          )}
-          {conversation?.status === 'ACTIVE' ? (
-            <Button
-              size="small"
-              icon={<CloseCircleOutlined />}
-              onClick={() => closeConv.mutate(conversationId!)}
-              loading={closeConv.isPending}
-            >
-              Đóng
-            </Button>
-          ) : (
-            <Button
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => reopenConv.mutate(conversationId!)}
-              loading={reopenConv.isPending}
-            >
-              Mở lại
-            </Button>
-          )}
-        </Space>
+          </div>
+        </div>
+      </div>
+
+      {/* Label tags bar */}
+      <div className="chat-labels-bar">
+        {currentLabels.map((label) => (
+          <span key={label} className="chat-label-tag" style={{ background: getLabelColor(label) }}>
+            {label}
+            <CloseCircleOutlined
+              className="chat-label-remove"
+              onClick={() => {
+                const newLabels = currentLabels.filter((l) => l !== label);
+                updateConv.mutate({ conversationId: conversationId!, data: { labels: newLabels } });
+              }}
+            />
+          </span>
+        ))}
+        {labelAddItems.length > 0 && (
+          <Dropdown menu={{ items: labelAddItems }} trigger={['click']}>
+            <button type="button" className="chat-label-add">
+              <PlusOutlined />
+            </button>
+          </Dropdown>
+        )}
       </div>
 
       <div className="message-list" ref={messageListRef} onScroll={handleScroll}>
@@ -283,7 +340,14 @@ export default function ChatPanel({ conversationId }: Props) {
             if (item.type === 'date') {
               return <DateSeparator key={`date-${item.date}`} label={item.label} />;
             }
-            return <MessageGroupBubble key={`grp-${item.messages[0].id}`} group={item} />;
+            return (
+              <MessageGroupBubble
+                key={`grp-${item.messages[0].id}`}
+                group={item}
+                customerName={customerName}
+                agentName={conversation?.assignedAgent?.displayName}
+              />
+            );
           })
         )}
 

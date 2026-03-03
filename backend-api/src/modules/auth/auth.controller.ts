@@ -18,16 +18,7 @@ export class AuthController {
   @Post('login')
   @Public()
   async login(@Body() dto: LoginDto, @Req() req: any) {
-    const tenantId = req.headers['x-tenant-id'];
-    if (!tenantId) {
-      throw new BadRequestException('x-tenant-id header is required');
-    }
-
-    // Validate tenant exists and is active (since @Public() skips TenantGuard)
-    const tenant = await this.tenantService.resolveFromHeader(tenantId);
-    if (!tenant) {
-      throw new ForbiddenException('Tenant not found or inactive');
-    }
+    const tenant = await this.resolveTenant(req);
 
     // Attach tenant to request for downstream services
     req.tenant = {
@@ -37,23 +28,14 @@ export class AuthController {
       status: tenant.status,
     };
 
-    const result = await this.authService.login(dto, tenantId);
+    const result = await this.authService.login(dto, tenant.id);
     return ApiResponseDto.success(result);
   }
 
   @Post('register')
   @Public()
   async register(@Body() dto: RegisterDto, @Req() req: any) {
-    const tenantId = req.headers['x-tenant-id'];
-    if (!tenantId) {
-      throw new BadRequestException('x-tenant-id header is required');
-    }
-
-    // Validate tenant exists and is active (since @Public() skips TenantGuard)
-    const tenant = await this.tenantService.resolveFromHeader(tenantId);
-    if (!tenant) {
-      throw new ForbiddenException('Tenant not found or inactive');
-    }
+    const tenant = await this.resolveTenant(req);
 
     // Attach tenant to request for downstream services
     req.tenant = {
@@ -63,7 +45,28 @@ export class AuthController {
       status: tenant.status,
     };
 
-    const result = await this.authService.register(dto, tenantId);
+    const result = await this.authService.register(dto, tenant.id);
     return ApiResponseDto.success(result);
+  }
+
+  /**
+   * Resolve tenant from x-tenant-id header or x-tenant-slug (subdomain)
+   */
+  private async resolveTenant(req: any) {
+    const tenantId = req.headers['x-tenant-id'];
+    const tenantSlug = req.headers['x-tenant-slug'];
+
+    let tenant: any;
+    if (tenantId) {
+      tenant = await this.tenantService.resolveFromHeader(tenantId);
+    } else if (tenantSlug) {
+      tenant = await this.tenantService.resolveFromSlug(tenantSlug);
+    }
+
+    if (!tenant) {
+      throw new ForbiddenException('Tenant not found or inactive');
+    }
+
+    return tenant;
   }
 }
