@@ -84,6 +84,8 @@ services:
     restart: unless-stopped
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+      HF_HUB_OFFLINE: "1"
+      NCCL_P2P_DISABLE: "1"
       VLLM_ATTENTION_BACKEND: XFORMERS
     command: >
       --model ${VLLM_MODEL:-Qwen/Qwen2.5-72B-Instruct-GPTQ-Int4}
