@@ -5,6 +5,8 @@ import { PrismaService } from '@core/database/prisma/prisma.service';
 import { PrismaClientManager } from '@core/database/prisma/prisma-client.manager';
 import { QueryEngineService } from '@modules/ai/services/query-engine.service';
 import { CustomerMessageEvent } from '@core/event-bus/events/customer-message.event';
+import { HandoffService } from '@modules/conversations/services/handoff.service';
+import { CONVERSATION_EVENTS } from '@modules/conversations/interfaces/conversation-events.interface';
 import { TelegramApiService } from './telegram-api.service';
 
 interface TelegramConfig {
@@ -30,6 +32,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     private readonly queryEngine: QueryEngineService,
     private readonly telegramApi: TelegramApiService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly handoffService: HandoffService,
   ) {}
 
   async onModuleInit() {
@@ -176,7 +179,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Store customer message
-      await db.conversationMessage.create({
+      const customerMsg = await db.conversationMessage.create({
         data: {
           conversationId: conversation.id,
           role: 'CUSTOMER',
@@ -184,6 +187,34 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
           metadata: { chatId, messageId: msg.message_id, username: msg.from?.username },
         },
       });
+
+      // Update lastMessageAt
+      await db.conversation.update({
+        where: { id: conversation.id },
+        data: { lastMessageAt: customerMsg.createdAt, unreadCount: { increment: 1 } },
+      });
+
+      // Emit new message event for agent inbox
+      this.eventEmitter.emit(CONVERSATION_EVENTS.NEW_MESSAGE, {
+        tenantId: tenant.id,
+        tenantDatabaseUrl: tenant.databaseUrl,
+        conversationId: conversation.id,
+        customerId: customer.id,
+        message: { id: customerMsg.id, role: 'CUSTOMER', content: userText, createdAt: customerMsg.createdAt },
+      });
+
+      // Check handoff: keyword detection
+      if (this.handoffService.shouldHandoffByKeyword(userText)) {
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'customer_request');
+        await bot.sendMessage(chatId, 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.');
+        return;
+      }
+
+      // Skip AI if conversation is in handoff mode
+      if (await this.handoffService.isInHandoff(tenant.databaseUrl, conversation.id)) {
+        this.logger.log(`Conversation ${conversation.id} is in handoff mode, skipping AI`);
+        return;
+      }
 
       // Fetch conversation history for context
       const recentMessages = await db.conversationMessage.findMany({
@@ -222,8 +253,23 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         allowGeneralKnowledge: aiSettings.allowGeneralKnowledge ?? false,
       });
 
+      // Check handoff: low confidence
+      if (this.handoffService.shouldHandoffByConfidence(result.confidence ?? 1)) {
+        await db.conversationMessage.create({
+          data: {
+            conversationId: conversation.id,
+            role: 'AI_ASSISTANT',
+            content: result.answer,
+            metadata: { confidence: result.confidence, isSuggestion: true },
+          },
+        });
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'low_confidence');
+        await bot.sendMessage(chatId, 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.');
+        return;
+      }
+
       // Store AI response
-      await db.conversationMessage.create({
+      const aiMsg = await db.conversationMessage.create({
         data: {
           conversationId: conversation.id,
           role: 'AI_ASSISTANT',
@@ -235,11 +281,26 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         },
       });
 
+      // Update lastMessageAt
+      await db.conversation.update({
+        where: { id: conversation.id },
+        data: { lastMessageAt: aiMsg.createdAt },
+      });
+
+      // Emit AI response event
+      this.eventEmitter.emit(CONVERSATION_EVENTS.NEW_MESSAGE, {
+        tenantId: tenant.id,
+        tenantDatabaseUrl: tenant.databaseUrl,
+        conversationId: conversation.id,
+        customerId: customer.id,
+        message: { id: aiMsg.id, role: 'AI_ASSISTANT', content: result.answer, createdAt: aiMsg.createdAt },
+      });
+
       // Send reply
       await this.telegramApi.sendMessage(bot, chatId, result.answer);
 
       // Trigger preference extraction every 3 messages
-      const totalMessages = recentMessages.length + 1; // +1 for AI response just stored
+      const totalMessages = recentMessages.length + 1;
       if (totalMessages >= 3 && totalMessages % 3 === 0) {
         const allMessages = [...recentMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'AI_ASSISTANT', content: result.answer }];
         this.eventEmitter.emit(

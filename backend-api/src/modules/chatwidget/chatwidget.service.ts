@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as crypto from 'crypto';
 import { PrismaClientManager } from '@core/database/prisma/prisma-client.manager';
 import { QueryEngineService } from '@modules/ai/services/query-engine.service';
+import { HandoffService } from '@modules/conversations/services/handoff.service';
+import { CONVERSATION_EVENTS } from '@modules/conversations/interfaces/conversation-events.interface';
 
 interface TenantInfo {
   id: string;
@@ -28,6 +31,8 @@ export class ChatWidgetService {
   constructor(
     private readonly clientManager: PrismaClientManager,
     private readonly queryEngine: QueryEngineService,
+    private readonly eventEmitter: EventEmitter2,
+    private readonly handoffService: HandoffService,
   ) {}
 
   async initSession(
@@ -126,7 +131,7 @@ export class ChatWidgetService {
     }
 
     // Store customer message
-    await db.conversationMessage.create({
+    const customerMsg = await db.conversationMessage.create({
       data: {
         conversationId: conversation.id,
         role: 'CUSTOMER',
@@ -134,6 +139,32 @@ export class ChatWidgetService {
         metadata: { sessionId: dto.sessionId },
       },
     });
+
+    // Update lastMessageAt
+    await db.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: customerMsg.createdAt, unreadCount: { increment: 1 } },
+    });
+
+    // Emit new message event for agent inbox
+    this.eventEmitter.emit(CONVERSATION_EVENTS.NEW_MESSAGE, {
+      tenantId: tenant.id,
+      tenantDatabaseUrl: tenant.databaseUrl,
+      conversationId: conversation.id,
+      customerId: customer.id,
+      message: { id: customerMsg.id, role: 'CUSTOMER', content: dto.message, createdAt: customerMsg.createdAt },
+    });
+
+    // Check handoff: keyword detection
+    if (this.handoffService.shouldHandoffByKeyword(dto.message)) {
+      await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'customer_request');
+      return { answer: 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.', confidence: 1, sources: [] };
+    }
+
+    // Skip AI if conversation is in handoff mode
+    if (await this.handoffService.isInHandoff(tenant.databaseUrl, conversation.id)) {
+      return { answer: 'Nhân viên đang hỗ trợ bạn. Vui lòng chờ phản hồi.', confidence: 1, sources: [] };
+    }
 
     // Load customer memories
     const memories = await db.customerMemory.findMany({
@@ -158,8 +189,22 @@ export class ChatWidgetService {
       allowGeneralKnowledge: aiSettings.allowGeneralKnowledge ?? false,
     });
 
+    // Check handoff: low confidence
+    if (this.handoffService.shouldHandoffByConfidence(result.confidence ?? 1)) {
+      await db.conversationMessage.create({
+        data: {
+          conversationId: conversation.id,
+          role: 'AI_ASSISTANT',
+          content: result.answer,
+          metadata: { confidence: result.confidence, isSuggestion: true },
+        },
+      });
+      await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'low_confidence');
+      return { answer: 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.', confidence: 1, sources: [] };
+    }
+
     // Store AI response
-    await db.conversationMessage.create({
+    const aiMsg = await db.conversationMessage.create({
       data: {
         conversationId: conversation.id,
         role: 'AI_ASSISTANT',
@@ -169,6 +214,21 @@ export class ChatWidgetService {
           sources: result.sources?.map((s) => s.documentId),
         },
       },
+    });
+
+    // Update lastMessageAt
+    await db.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: aiMsg.createdAt },
+    });
+
+    // Emit AI response event
+    this.eventEmitter.emit(CONVERSATION_EVENTS.NEW_MESSAGE, {
+      tenantId: tenant.id,
+      tenantDatabaseUrl: tenant.databaseUrl,
+      conversationId: conversation.id,
+      customerId: customer.id,
+      message: { id: aiMsg.id, role: 'AI_ASSISTANT', content: result.answer, createdAt: aiMsg.createdAt },
     });
 
     return result;
@@ -200,7 +260,7 @@ export class ChatWidgetService {
     }
 
     // Store customer message
-    await db.conversationMessage.create({
+    const customerMsg = await db.conversationMessage.create({
       data: {
         conversationId: conversation.id,
         role: 'CUSTOMER',
@@ -208,6 +268,34 @@ export class ChatWidgetService {
         metadata: { sessionId: dto.sessionId },
       },
     });
+
+    // Update lastMessageAt + unreadCount
+    await db.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: customerMsg.createdAt, unreadCount: { increment: 1 } },
+    });
+
+    // Emit customer message event for agent inbox
+    this.eventEmitter.emit(CONVERSATION_EVENTS.NEW_MESSAGE, {
+      tenantId: tenant.id,
+      tenantDatabaseUrl: tenant.databaseUrl,
+      conversationId: conversation.id,
+      customerId: customer.id,
+      message: { id: customerMsg.id, role: 'CUSTOMER', content: dto.message, createdAt: customerMsg.createdAt },
+    });
+
+    // Check handoff: keyword detection
+    if (this.handoffService.shouldHandoffByKeyword(dto.message)) {
+      await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'customer_request');
+      yield { content: 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.', isLast: true };
+      return;
+    }
+
+    // Skip AI if conversation is in handoff mode
+    if (await this.handoffService.isInHandoff(tenant.databaseUrl, conversation.id)) {
+      yield { content: 'Nhân viên đang hỗ trợ bạn. Vui lòng chờ phản hồi.', isLast: true };
+      return;
+    }
 
     // Load customer memories
     const memories = await db.customerMemory.findMany({
@@ -239,14 +327,31 @@ export class ChatWidgetService {
       if (chunk.isLast) break;
     }
 
+    // Check handoff: low confidence from streamed result metadata
+    const lastChunk = { confidence: 1 }; // Stream doesn't return confidence easily, store full answer
     // Store complete AI response
-    await db.conversationMessage.create({
+    const aiMsg = await db.conversationMessage.create({
       data: {
         conversationId: conversation.id,
         role: 'AI_ASSISTANT',
         content: fullAnswer,
         metadata: { streamed: true },
       },
+    });
+
+    // Update lastMessageAt
+    await db.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: aiMsg.createdAt },
+    });
+
+    // Emit AI response event for agent inbox
+    this.eventEmitter.emit(CONVERSATION_EVENTS.NEW_MESSAGE, {
+      tenantId: tenant.id,
+      tenantDatabaseUrl: tenant.databaseUrl,
+      conversationId: conversation.id,
+      customerId: customer.id,
+      message: { id: aiMsg.id, role: 'AI_ASSISTANT', content: fullAnswer, createdAt: aiMsg.createdAt },
     });
   }
 

@@ -1,8 +1,11 @@
 import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '@core/database/prisma/prisma.service';
 import { PrismaClientManager } from '@core/database/prisma/prisma-client.manager';
 import { QueryEngineService } from '@modules/ai/services/query-engine.service';
+import { HandoffService } from '@modules/conversations/services/handoff.service';
+import { CONVERSATION_EVENTS } from '@modules/conversations/interfaces/conversation-events.interface';
 import { FacebookApiService } from './facebook-api.service';
 import { FacebookWebhookDto, FbMessaging } from './dto/facebook-webhook.dto';
 
@@ -21,6 +24,8 @@ export class MessengerService {
     private readonly clientManager: PrismaClientManager,
     private readonly queryEngine: QueryEngineService,
     private readonly fbApi: FacebookApiService,
+    private readonly eventEmitter: EventEmitter2,
+    private readonly handoffService: HandoffService,
   ) {}
 
   async handleWebhook(body: FacebookWebhookDto, rawBody: Buffer, signature: string): Promise<void> {
@@ -98,7 +103,7 @@ export class MessengerService {
       }
 
       // 6. Store customer message
-      await db.conversationMessage.create({
+      const customerMsg = await db.conversationMessage.create({
         data: {
           conversationId: conversation.id,
           role: 'CUSTOMER',
@@ -106,6 +111,34 @@ export class MessengerService {
           metadata: { psid, timestamp: messaging.timestamp },
         },
       });
+
+      // Update lastMessageAt
+      await db.conversation.update({
+        where: { id: conversation.id },
+        data: { lastMessageAt: customerMsg.createdAt, unreadCount: { increment: 1 } },
+      });
+
+      // Emit new message event for agent inbox
+      this.eventEmitter.emit(CONVERSATION_EVENTS.NEW_MESSAGE, {
+        tenantId: tenant.id,
+        tenantDatabaseUrl: tenant.databaseUrl,
+        conversationId: conversation.id,
+        customerId: customer.id,
+        message: { id: customerMsg.id, role: 'CUSTOMER', content: userText, createdAt: customerMsg.createdAt },
+      });
+
+      // Check handoff: keyword detection
+      if (this.handoffService.shouldHandoffByKeyword(userText)) {
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'customer_request');
+        await this.fbApi.sendMessage(psid, 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.', config.pageAccessToken);
+        return;
+      }
+
+      // Skip AI if conversation is in handoff mode (agent is handling)
+      if (await this.handoffService.isInHandoff(tenant.databaseUrl, conversation.id)) {
+        this.logger.log(`Conversation ${conversation.id} is in handoff mode, skipping AI`);
+        return;
+      }
 
       // Fetch conversation history for context
       const recentMessages = await db.conversationMessage.findMany({
@@ -142,11 +175,27 @@ export class MessengerService {
         allowGeneralKnowledge: aiSettings.allowGeneralKnowledge ?? false,
       });
 
+      // Check handoff: low confidence
+      if (this.handoffService.shouldHandoffByConfidence(result.confidence ?? 1)) {
+        // Store AI response as suggestion (not sent to customer)
+        await db.conversationMessage.create({
+          data: {
+            conversationId: conversation.id,
+            role: 'AI_ASSISTANT',
+            content: result.answer,
+            metadata: { confidence: result.confidence, isSuggestion: true },
+          },
+        });
+        await this.handoffService.triggerHandoff(tenant.id, tenant.databaseUrl, conversation.id, customer.id, 'low_confidence');
+        await this.fbApi.sendMessage(psid, 'Đang chuyển tiếp đến nhân viên hỗ trợ. Vui lòng chờ trong giây lát.', config.pageAccessToken);
+        return;
+      }
+
       // Strip markdown for FB (basic: remove **, ##, etc.)
       const plainAnswer = this.stripMarkdown(result.answer);
 
       // 8. Store AI response
-      await db.conversationMessage.create({
+      const aiMsg = await db.conversationMessage.create({
         data: {
           conversationId: conversation.id,
           role: 'AI_ASSISTANT',
@@ -156,6 +205,21 @@ export class MessengerService {
             sources: result.sources?.map((s) => s.documentId),
           },
         },
+      });
+
+      // Update lastMessageAt
+      await db.conversation.update({
+        where: { id: conversation.id },
+        data: { lastMessageAt: aiMsg.createdAt },
+      });
+
+      // Emit AI response event
+      this.eventEmitter.emit(CONVERSATION_EVENTS.NEW_MESSAGE, {
+        tenantId: tenant.id,
+        tenantDatabaseUrl: tenant.databaseUrl,
+        conversationId: conversation.id,
+        customerId: customer.id,
+        message: { id: aiMsg.id, role: 'AI_ASSISTANT', content: result.answer, createdAt: aiMsg.createdAt },
       });
 
       // 9. Send reply to Facebook

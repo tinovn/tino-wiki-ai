@@ -28,7 +28,7 @@ export interface NavItem {
 export const navItems: NavItem[] = [
   { key: 'home', href: '/', icon: React.createElement(HomeOutlined), label: 'Dashboard' },
   { key: 'users', href: '/users', icon: React.createElement(UserOutlined), label: 'Users', roles: ['ADMIN'] },
-  { key: 'messages', href: '/messages', icon: React.createElement(MessageOutlined), label: 'Messages' },
+  { key: 'conversations', href: '/conversations', icon: React.createElement(MessageOutlined), label: 'Conversations' },
   { key: 'knowledge', href: '/knowledge-base', icon: React.createElement(BookOutlined), label: 'Knowledge Base' },
   { key: 'documents', href: '/documents', icon: React.createElement(FileSearchOutlined), label: 'Documents' },
   { key: 'customers', href: '/customers', icon: React.createElement(TeamOutlined), label: 'Customers' },

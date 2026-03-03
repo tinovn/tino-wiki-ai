@@ -3,7 +3,7 @@ export const ROUTES = {
   REGISTER: '/register',
   DASHBOARD: '/',
   USERS: '/users',
-  MESSAGES: '/messages',
+  CONVERSATIONS: '/conversations',
   KNOWLEDGE_BASE: '/knowledge-base',
   DOCUMENTS: '/documents',
   DOCUMENTS_NEW: '/documents/new',

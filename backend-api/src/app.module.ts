@@ -18,6 +18,7 @@ import { CrawlerModule } from './modules/crawler/crawler.module';
 import { MessengerModule } from './modules/messenger/messenger.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
 import { ChatWidgetModule } from './modules/chatwidget/chatwidget.module';
+import { ConversationsModule } from './modules/conversations/conversations.module';
 import { AppController } from './app.controller';
 import { JwtAuthGuard } from '@common/guards/auth.guard';
 import { TenantGuard } from '@common/guards/tenant.guard';
@@ -43,6 +44,7 @@ import { RolesGuard } from '@common/guards/roles.guard';
     MessengerModule,
     TelegramModule,
     ChatWidgetModule,
+    ConversationsModule,
   ],
   controllers: [AppController],
   providers: [

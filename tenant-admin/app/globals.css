@@ -398,3 +398,156 @@ body {
 @keyframes blink {
   50% { opacity: 0; }
 }
+
+/* ─── Conversations Inbox ─── */
+
+.inbox-container {
+  display: flex;
+  height: 100%;
+  background: #fff;
+  overflow: hidden;
+}
+
+.inbox-sidebar {
+  width: 340px;
+  border-right: 1px solid #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.conv-list-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-top: 8px;
+}
+
+.conv-list-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #fafafa;
+  transition: background 0.15s;
+}
+
+.conv-list-item:hover {
+  background: #f5f5f5;
+}
+
+.conv-list-item-selected {
+  background: #e6f4ff;
+}
+
+.conv-list-item-selected:hover {
+  background: #bae0ff;
+}
+
+.inbox-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.message-row {
+  display: flex;
+}
+
+.message-row-left {
+  justify-content: flex-start;
+}
+
+.message-row-right {
+  justify-content: flex-end;
+}
+
+.message-bubble {
+  max-width: 70%;
+  padding: 8px 14px;
+  border-radius: 12px;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.message-bubble-customer {
+  background: #f0f0f0;
+  border-bottom-left-radius: 4px;
+}
+
+.message-bubble-agent {
+  background: #1677ff;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.message-bubble-agent .ant-typography {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.message-bubble-ai {
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-bottom-left-radius: 4px;
+}
+
+.message-bubble-system {
+  align-self: center;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  max-width: 80%;
+  text-align: center;
+}
+
+.composer-bar {
+  border-top: 1px solid #f0f0f0;
+  padding: 12px;
+  flex-shrink: 0;
+}
+
+.inbox-details {
+  width: 340px;
+  border-left: 1px solid #f0f0f0;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1200px) {
+  .inbox-sidebar {
+    width: 280px;
+  }
+  .inbox-details {
+    width: 280px;
+  }
+}
+
+@media (max-width: 900px) {
+  .inbox-container {
+    flex-direction: column;
+  }
+  .inbox-sidebar,
+  .inbox-details {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid #f0f0f0;
+  }
+}
