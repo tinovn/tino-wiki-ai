@@ -3,8 +3,8 @@
 # ============================================
 FROM node:20-alpine AS builder
 
-# Install build dependencies for bcrypt native module
-RUN apk add --no-cache python3 make g++
+# Install build dependencies for bcrypt native module + OpenSSL for Prisma engine detection
+RUN apk add --no-cache python3 make g++ openssl
 
 WORKDIR /app
 
@@ -30,7 +30,8 @@ RUN npm prune --omit=dev
 # ============================================
 FROM node:20-alpine AS production
 
-RUN apk add --no-cache tini
+# OpenSSL needed by Prisma query engine (libssl.so.3)
+RUN apk add --no-cache tini openssl
 
 WORKDIR /app
 
