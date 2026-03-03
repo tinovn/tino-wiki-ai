@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
-import { Typography, Tag, Button, Space, Spin, Empty } from 'antd';
+import { Typography, Tag, Button, Space, Spin, Empty, Dropdown, message as antMessage } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   CloseCircleOutlined,
   CheckCircleOutlined,
@@ -9,9 +10,16 @@ import {
   SendOutlined,
   MessageOutlined,
   LoadingOutlined,
+  LogoutOutlined,
+  SwapOutlined,
+  RobotOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
-import { useConversation, useConversationMessages, useCloseConversation, useReopenConversation } from '@/hooks/useConversations';
+import { useConversation, useConversationMessages, useCloseConversation, useReopenConversation, useAssignConversation, useUnassignConversation, useResumeAi, INBOX_KEY } from '@/hooks/useConversations';
 import { useConversationSocket } from '@/hooks/useWebSocket';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/providers/AuthProvider';
+import { useUsers } from '@/hooks/useUsers';
 import { conversationsService } from '@/services/conversations.service';
 import { groupMessages } from '@/utils/message-grouping';
 import MessageGroupBubble from './MessageBubble';
@@ -32,6 +40,7 @@ interface Props {
 }
 
 export default function ChatPanel({ conversationId }: Props) {
+  const queryClient = useQueryClient();
   const messageListRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -52,6 +61,11 @@ export default function ChatPanel({ conversationId }: Props) {
 
   const closeConv = useCloseConversation();
   const reopenConv = useReopenConversation();
+  const assignConv = useAssignConversation();
+  const unassignConv = useUnassignConversation();
+  const resumeAi = useResumeAi();
+  const { user: currentUser } = useAuth();
+  const { data: usersData } = useUsers({ limit: 100 });
 
   // Flatten pages: pages[0] = latest, pages[last] = oldest → reverse for chronological
   const allMessages = useMemo(() => {
@@ -143,12 +157,14 @@ export default function ChatPanel({ conversationId }: Props) {
     });
   }, [onTyping]);
 
-  // Mark as read
+  // Mark as read + update sidebar unread badge
   useEffect(() => {
     if (conversationId && conversation?.unreadCount) {
-      conversationsService.markRead(conversationId);
+      conversationsService.markRead(conversationId).then(() => {
+        queryClient.invalidateQueries({ queryKey: [INBOX_KEY] });
+      });
     }
-  }, [conversationId, conversation?.unreadCount]);
+  }, [conversationId, conversation?.unreadCount, queryClient]);
 
   if (!conversationId) {
     return (
@@ -160,6 +176,52 @@ export default function ChatPanel({ conversationId }: Props) {
 
   const channelInfo = CHANNEL_LABELS[conversation?.channel || ''] || { label: conversation?.channel, icon: <MessageOutlined />, color: '#999' };
   const customerName = conversation?.customer?.name || conversation?.customer?.email || 'Khách';
+  const isAssignedToMe = conversation?.assignedAgentId === currentUser?.sub;
+  const agents = (usersData?.data ?? []).filter((u) => u.isActive);
+
+  // Build agent action menu items
+  const agentMenuItems: MenuProps['items'] = [
+    // Leave — only when assigned to me
+    ...(isAssignedToMe ? [{
+      key: 'leave',
+      icon: <LogoutOutlined />,
+      label: 'Rời đi',
+      onClick: () => {
+        unassignConv.mutate(conversationId!, {
+          onSuccess: () => antMessage.success('Đã rời khỏi hội thoại'),
+        });
+      },
+    }] : []),
+    // Transfer to another agent
+    {
+      key: 'transfer',
+      icon: <SwapOutlined />,
+      label: 'Chuyển nhân viên',
+      children: agents
+        .filter((a) => a.id !== conversation?.assignedAgentId)
+        .map((agent) => ({
+          key: `agent-${agent.id}`,
+          label: agent.displayName,
+          onClick: () => {
+            assignConv.mutate(
+              { conversationId: conversationId!, agentId: agent.id },
+              { onSuccess: () => antMessage.success(`Đã chuyển cho ${agent.displayName}`) },
+            );
+          },
+        })),
+    },
+    // Resume AI — only when in handoff
+    ...(conversation?.isHandoff ? [{
+      key: 'resume-ai',
+      icon: <RobotOutlined />,
+      label: 'Chuyển cho AI',
+      onClick: () => {
+        resumeAi.mutate(conversationId!, {
+          onSuccess: () => antMessage.success('AI đã tiếp quản hội thoại'),
+        });
+      },
+    }] : []),
+  ];
 
   return (
     <div className="inbox-chat">
@@ -168,9 +230,19 @@ export default function ChatPanel({ conversationId }: Props) {
           <Title level={5} style={{ margin: 0 }}>{customerName}</Title>
           <Tag icon={channelInfo.icon} color={channelInfo.color}>{channelInfo.label}</Tag>
           {conversation?.isHandoff && <Tag color="warning">Handoff</Tag>}
+          {conversation?.assignedAgent && (
+            <Tag color="blue">{conversation.assignedAgent.displayName}</Tag>
+          )}
           {conversation?.status === 'CLOSED' && <Tag color="default">Đã đóng</Tag>}
         </div>
         <Space>
+          {conversation?.status === 'ACTIVE' && agentMenuItems.length > 0 && (
+            <Dropdown menu={{ items: agentMenuItems }} trigger={['click']} placement="bottomRight">
+              <Button size="small" icon={<TeamOutlined />}>
+                Quản lý
+              </Button>
+            </Dropdown>
+          )}
           {conversation?.status === 'ACTIVE' ? (
             <Button
               size="small"
@@ -220,7 +292,11 @@ export default function ChatPanel({ conversationId }: Props) {
       </div>
 
       {conversation?.status === 'ACTIVE' && (
-        <MessageComposer conversationId={conversationId} />
+        <MessageComposer
+          conversationId={conversationId}
+          isHandoff={conversation?.isHandoff}
+          latestMessage={allMessages[allMessages.length - 1]}
+        />
       )}
     </div>
   );

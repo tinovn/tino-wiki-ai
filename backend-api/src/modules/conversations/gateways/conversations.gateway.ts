@@ -244,9 +244,9 @@ export class ConversationsGateway
 
   @OnEvent(CONVERSATION_EVENTS.NEW_MESSAGE)
   handleNewMessage(payload: ConversationNewMessagePayload) {
-    // Broadcast to tenant room and conversation room
+    // Broadcast to tenant room only — agents join tenant room on connect,
+    // so emitting to both tenant + conversation rooms causes duplicate delivery
     this.server.to(`tenant:${payload.tenantId}`).emit('new_message', payload);
-    this.server.to(`conversation:${payload.conversationId}`).emit('new_message', payload);
   }
 
   @OnEvent(CONVERSATION_EVENTS.UPDATED)
@@ -266,8 +266,6 @@ export class ConversationsGateway
 
   @OnEvent(CONVERSATION_EVENTS.ECOMMERCE)
   handleEcommerceEvent(payload: ConversationEcommercePayload) {
-    // Broadcast ecommerce events (cart_updated, order_created, intent_detected) to conversation room
-    this.server.to(`conversation:${payload.conversationId}`).emit('ecommerce_event', payload);
     this.server.to(`tenant:${payload.tenantId}`).emit('ecommerce_event', payload);
   }
 }

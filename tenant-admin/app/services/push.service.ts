@@ -47,7 +47,7 @@ export async function subscribeToPush(): Promise<boolean> {
 
     const subscription = await swRegistration!.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey,
+      applicationServerKey: applicationServerKey as BufferSource,
     });
 
     const subscriptionJson = subscription.toJSON();

@@ -44,6 +44,10 @@ export const conversationsService = {
     await apiClient.post(`/conversations/${id}/unassign`);
   },
 
+  async resumeAi(id: string): Promise<void> {
+    await apiClient.post(`/conversations/${id}/resume-ai`);
+  },
+
   async update(id: string, data: { priority?: string; labels?: string[] }): Promise<void> {
     await apiClient.patch(`/conversations/${id}`, data);
   },

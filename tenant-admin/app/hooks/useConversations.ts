@@ -106,8 +106,33 @@ export function useAssignConversation() {
   return useMutation({
     mutationFn: ({ conversationId, agentId }: { conversationId: string; agentId: string }) =>
       conversationsService.assign(conversationId, agentId),
-    onSuccess: () => {
+    onSuccess: (_, { conversationId }) => {
       queryClient.invalidateQueries({ queryKey: [INBOX_KEY] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.CONVERSATIONS, conversationId] });
+    },
+  });
+}
+
+export function useUnassignConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (conversationId: string) =>
+      conversationsService.unassign(conversationId),
+    onSuccess: (_, conversationId) => {
+      queryClient.invalidateQueries({ queryKey: [INBOX_KEY] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.CONVERSATIONS, conversationId] });
+    },
+  });
+}
+
+export function useResumeAi() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (conversationId: string) =>
+      conversationsService.resumeAi(conversationId),
+    onSuccess: (_, conversationId) => {
+      queryClient.invalidateQueries({ queryKey: [INBOX_KEY] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.CONVERSATIONS, conversationId] });
     },
   });
 }

@@ -37,11 +37,49 @@ export function useWebSocket() {
     }) => {
       const { conversationId, message } = payload;
 
-      // Dedup: skip if message already in cache
+      // Dedup: skip if message already in cache (by ID or optimistic match)
       const existing = queryClient.getQueryData<InfiniteData<MessagesPage>>([MESSAGES_KEY, conversationId]);
       if (existing) {
         const allMsgs = existing.pages.flatMap((p) => p.messages);
+        // Skip if exact ID already exists
         if (message.id && allMsgs.some((m) => m.id === message.id)) return;
+        // Skip if there's a pending optimistic message with same content+role
+        // (WebSocket arrived before onSuccess replaced the optimistic msg)
+        if (allMsgs.some((m) =>
+          (m.metadata as Record<string, unknown>)?._optimistic &&
+          m.role === message.role &&
+          m.content === message.content
+        )) {
+          // Replace the optimistic message with the real one instead of appending
+          queryClient.setQueryData<InfiniteData<MessagesPage>>(
+            [MESSAGES_KEY, conversationId],
+            (old) => {
+              if (!old) return old;
+              return {
+                ...old,
+                pages: old.pages.map((page) => ({
+                  ...page,
+                  messages: page.messages.map((msg) =>
+                    (msg.metadata as Record<string, unknown>)?._optimistic &&
+                    msg.role === message.role &&
+                    msg.content === message.content
+                      ? {
+                          id: message.id || msg.id,
+                          conversationId,
+                          role: message.role as MessageRole,
+                          content: message.content,
+                          senderId: message.senderId,
+                          createdAt: typeof message.createdAt === 'string' ? message.createdAt : new Date(message.createdAt).toISOString(),
+                          metadata: message.metadata,
+                        }
+                      : msg,
+                  ),
+                })),
+              };
+            },
+          );
+          return;
+        }
       }
 
       const newMsg: InboxMessage = {
@@ -68,7 +106,9 @@ export function useWebSocket() {
         },
       );
 
+      // Invalidate inbox (sidebar) + conversation detail (triggers markAsRead)
       queryClient.invalidateQueries({ queryKey: [INBOX_KEY] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.CONVERSATIONS, conversationId] });
     });
 
     socket.on('conversation_updated', (payload: { conversationId: string; changes: Record<string, unknown> }) => {
