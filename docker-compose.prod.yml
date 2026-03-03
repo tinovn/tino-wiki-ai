@@ -101,7 +101,7 @@ services:
               count: all
               capabilities: [gpu]
     volumes:
-      - huggingface_cache:/root/.cache/huggingface
+      - ./data/huggingface:/root/.cache/huggingface
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
@@ -126,7 +126,7 @@ services:
       BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-32}
       PORT: 8001
     volumes:
-      - embedding_models:/app/models
+      - ./data/models:/app/models
     expose:
       - "8001"
     healthcheck:
@@ -350,10 +350,6 @@ volumes:
   redis_data:
     driver: local
   qdrant_data:
-    driver: local
-  huggingface_cache:
-    driver: local
-  embedding_models:
     driver: local
   prometheus_data:
     driver: local
