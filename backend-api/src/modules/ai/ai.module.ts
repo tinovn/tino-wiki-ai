@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AiQueryController } from './controllers/ai-query.controller';
 import { AiStatusController } from './controllers/ai-status.controller';
 import { AiOrchestratorService } from './services/ai-orchestrator.service';
@@ -11,8 +11,10 @@ import { ContextMergerService } from './services/context-merger.service';
 import { PromptBuilderService } from './services/prompt-builder.service';
 import { AiPipelineProcessor } from './processors/ai-pipeline.processor';
 import { DocumentEventListener } from './listeners/document-event.listener';
+import { TelegramModule } from '@modules/telegram/telegram.module';
 
 @Module({
+  imports: [forwardRef(() => TelegramModule)],
   controllers: [AiQueryController, AiStatusController],
   providers: [
     AiOrchestratorService,

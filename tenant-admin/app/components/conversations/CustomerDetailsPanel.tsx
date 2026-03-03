@@ -1,20 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { Typography, Tag, Select, Button, Input, Dropdown, Avatar, Divider } from 'antd';
-import type { MenuProps } from 'antd';
+import { Typography, Tag, Select, Button, Input, Avatar, Divider } from 'antd';
 import {
   MailOutlined,
   PhoneOutlined,
   MessageOutlined,
   BulbOutlined,
   StarOutlined,
-  PlusOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useConversation, useConversationNotes, useRelatedConversations, useUpdateConversation, useAddNote } from '@/hooks/useConversations';
-import { getLabelColor, AVAILABLE_LABELS } from '@/utils/label-utils';
+import { getLabelColor } from '@/utils/label-utils';
+import LabelPicker from './LabelPicker';
 import type { InboxConversation } from '@/types/conversation';
 import dayjs from 'dayjs';
 
@@ -77,20 +76,15 @@ export default function CustomerDetailsPanel({ conversationId }: Props) {
     );
   };
 
-  const labelAddItems: MenuProps['items'] = AVAILABLE_LABELS
-    .filter((l) => !labels.includes(l))
-    .map((l) => ({
-      key: l,
-      label: (
-        <span>
-          <span className="label-dot" style={{ background: getLabelColor(l) }} />
-          {l}
-        </span>
-      ),
-      onClick: () => {
-        updateConv.mutate({ conversationId: conversationId!, data: { labels: [...labels, l] } });
-      },
-    }));
+  const handleAddLabel = (label: string) => {
+    if (!labels.includes(label)) {
+      updateConv.mutate({ conversationId: conversationId!, data: { labels: [...labels, label] } });
+    }
+  };
+
+  const handleRemoveLabel = (label: string) => {
+    updateConv.mutate({ conversationId: conversationId!, data: { labels: labels.filter((l) => l !== label) } });
+  };
 
   return (
     <div className="inbox-details">
@@ -100,6 +94,9 @@ export default function CustomerDetailsPanel({ conversationId }: Props) {
           {customerName[0]?.toUpperCase()}
         </div>
         <div className="detail-name">{customerName}</div>
+        {customer.externalId && (
+          <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{customer.externalId}</div>
+        )}
         <Tag style={{ margin: '4px 0' }}>
           {CHANNEL_LABELS_MAP[conversation.channel] || conversation.channel}
         </Tag>
@@ -135,21 +132,18 @@ export default function CustomerDetailsPanel({ conversationId }: Props) {
       <div className="detail-section">
         <div className="detail-section-header">
           <span>Nhãn</span>
-          {labelAddItems.length > 0 && (
-            <Dropdown menu={{ items: labelAddItems }} trigger={['click']}>
-              <PlusOutlined className="detail-section-action" />
-            </Dropdown>
-          )}
+          <LabelPicker
+            currentLabels={labels}
+            onAdd={handleAddLabel}
+            onRemove={handleRemoveLabel}
+          />
         </div>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {labels.length > 0 ? labels.map((l) => (
             <Tag
               key={l}
               closable
-              onClose={() => {
-                const newLabels = labels.filter((x) => x !== l);
-                updateConv.mutate({ conversationId: conversationId!, data: { labels: newLabels } });
-              }}
+              onClose={() => handleRemoveLabel(l)}
               color={getLabelColor(l)}
             >
               {l}

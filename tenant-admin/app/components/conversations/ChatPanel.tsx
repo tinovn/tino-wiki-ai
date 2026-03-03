@@ -13,7 +13,6 @@ import {
   SwapOutlined,
   RobotOutlined,
   MoreOutlined,
-  PlusOutlined,
   StopOutlined,
   BellOutlined,
 } from '@ant-design/icons';
@@ -24,11 +23,12 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useUsers } from '@/hooks/useUsers';
 import { conversationsService } from '@/services/conversations.service';
 import { groupMessages } from '@/utils/message-grouping';
-import { getLabelColor, AVAILABLE_LABELS } from '@/utils/label-utils';
+import { getLabelColor } from '@/utils/label-utils';
 import MessageGroupBubble from './MessageBubble';
 import DateSeparator from './DateSeparator';
 import TypingIndicator from './TypingIndicator';
 import MessageComposer from './MessageComposer';
+import LabelPicker from './LabelPicker';
 
 const CHANNEL_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   messenger: { label: 'Messenger', icon: <FacebookOutlined />, color: '#1877F2' },
@@ -213,8 +213,8 @@ export default function ChatPanel({ conversationId }: Props) {
         });
       },
     }] : []),
-    // Resume AI — only when in handoff
-    ...(conversation?.isHandoff ? [{
+    // Resume AI — always visible when conversation is active
+    ...(conversation?.status === 'ACTIVE' ? [{
       key: 'resume-ai',
       icon: <RobotOutlined />,
       label: 'Chuyển cho AI',
@@ -229,21 +229,15 @@ export default function ChatPanel({ conversationId }: Props) {
     { key: 'mute', icon: <BellOutlined />, label: 'Tắt thông báo hội thoại', disabled: true },
   ];
 
-  // Build label add dropdown items
-  const labelAddItems: MenuProps['items'] = AVAILABLE_LABELS
-    .filter((l) => !currentLabels.includes(l))
-    .map((l) => ({
-      key: l,
-      label: (
-        <span>
-          <span className="label-dot" style={{ background: getLabelColor(l) }} />
-          {l}
-        </span>
-      ),
-      onClick: () => {
-        updateConv.mutate({ conversationId: conversationId!, data: { labels: [...currentLabels, l] } });
-      },
-    }));
+  const handleAddLabel = (label: string) => {
+    if (!currentLabels.includes(label)) {
+      updateConv.mutate({ conversationId: conversationId!, data: { labels: [...currentLabels, label] } });
+    }
+  };
+
+  const handleRemoveLabel = (label: string) => {
+    updateConv.mutate({ conversationId: conversationId!, data: { labels: currentLabels.filter((l) => l !== label) } });
+  };
 
   return (
     <div className="inbox-chat">
@@ -254,8 +248,7 @@ export default function ChatPanel({ conversationId }: Props) {
             <div className="chat-header-name">{customerName}</div>
             <div className="chat-header-subtitle">
               {channelInfo.icon} {channelInfo.label}
-              {conversation?.customer?.email && ` · ${conversation.customer.email}`}
-              {conversation?.customer?.externalId && !conversation?.customer?.email && ` · ${conversation.customer.externalId}`}
+              {conversation?.customer?.externalId && ` · ${conversation.customer.externalId}`}
             </div>
           </div>
           <div className="chat-header-actions">
@@ -306,20 +299,15 @@ export default function ChatPanel({ conversationId }: Props) {
             {label}
             <CloseCircleOutlined
               className="chat-label-remove"
-              onClick={() => {
-                const newLabels = currentLabels.filter((l) => l !== label);
-                updateConv.mutate({ conversationId: conversationId!, data: { labels: newLabels } });
-              }}
+              onClick={() => handleRemoveLabel(label)}
             />
           </span>
         ))}
-        {labelAddItems.length > 0 && (
-          <Dropdown menu={{ items: labelAddItems }} trigger={['click']}>
-            <button type="button" className="chat-label-add">
-              <PlusOutlined />
-            </button>
-          </Dropdown>
-        )}
+        <LabelPicker
+          currentLabels={currentLabels}
+          onAdd={handleAddLabel}
+          onRemove={handleRemoveLabel}
+        />
       </div>
 
       <div className="message-list" ref={messageListRef} onScroll={handleScroll}>

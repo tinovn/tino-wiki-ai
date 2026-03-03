@@ -179,7 +179,7 @@ services:
       # LLM
       LLM_DEFAULT_PROVIDER: ${LLM_DEFAULT_PROVIDER:-vllm}
       VLLM_BASE_URL: http://vllm:8000/v1
-      VLLM_MODEL: ${VLLM_MODEL:-tino-wiki}
+      VLLM_MODEL: tino-wiki
       VLLM_API_KEY: ${VLLM_API_KEY:-}
 
       # LLM Fallbacks

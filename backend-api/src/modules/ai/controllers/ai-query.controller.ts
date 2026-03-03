@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Req, Res } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Req, Res, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as crypto from 'crypto';
@@ -8,14 +8,19 @@ import { ApiResponseDto } from '@common/dto';
 import { PrismaService } from '@core/database/prisma/prisma.service';
 import { Roles } from '@common/decorators';
 import { DEFAULT_MESSAGES, TenantMessageKey } from '@common/utils';
+import { TelegramService } from '@modules/telegram/telegram.service';
 
 @ApiTags('AI')
 @ApiBearerAuth()
 @Controller('ai')
 export class AiQueryController {
+  private readonly logger = new Logger(AiQueryController.name);
+
   constructor(
     private readonly queryEngine: QueryEngineService,
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => TelegramService))
+    private readonly telegramService: TelegramService,
   ) {}
 
   @Get('settings')
@@ -87,6 +92,24 @@ export class AiQueryController {
       where: { id: tenantId },
       data: { settings: currentSettings },
     });
+
+    // Auto restart/stop Telegram bot when config changes
+    if (body.telegram !== undefined) {
+      const tenantSlug = req.tenant?.slug;
+      if (tenantSlug) {
+        try {
+          if (body.telegram?.botToken) {
+            await this.telegramService.startBot(tenantSlug, body.telegram.botToken);
+            this.logger.log(`Telegram bot auto-started for ${tenantSlug}`);
+          } else {
+            await this.telegramService.stopBot(tenantSlug);
+            this.logger.log(`Telegram bot stopped for ${tenantSlug}`);
+          }
+        } catch (err: any) {
+          this.logger.error(`Failed to restart Telegram bot for ${tenantSlug}: ${err.message}`);
+        }
+      }
+    }
 
     return ApiResponseDto.success({
       messenger: currentSettings.messenger || null,
