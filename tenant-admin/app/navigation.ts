@@ -14,6 +14,7 @@ import {
   RobotOutlined,
   TeamOutlined,
   LikeOutlined,
+  ApiOutlined,
 } from '@ant-design/icons';
 
 export interface NavItem {
@@ -36,6 +37,7 @@ export const navItems: NavItem[] = [
   { key: 'feedback', href: '/feedback', icon: React.createElement(LikeOutlined), label: 'Feedback' },
   { key: 'logs', href: '/logs', icon: React.createElement(FileTextOutlined), label: 'Logs' },
   { key: 'crawler', href: '/crawler', icon: React.createElement(GlobalOutlined), label: 'Crawler', roles: ['ADMIN', 'EDITOR'] },
+  { key: 'channels', href: '/channels', icon: React.createElement(ApiOutlined), label: 'Channels', roles: ['ADMIN'] },
   { key: 'mcp', href: '/mcp-connections', icon: React.createElement(CloudOutlined), label: 'MCP Connections' },
   { key: 'settings', href: '/settings', icon: React.createElement(SettingOutlined), label: 'Settings' },
 ];

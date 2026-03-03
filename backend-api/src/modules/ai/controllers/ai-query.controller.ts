@@ -47,6 +47,44 @@ export class AiQueryController {
     return ApiResponseDto.success(currentSettings.ai);
   }
 
+  @Get('channels')
+  @Roles('ADMIN')
+  async getChannels(@Req() req: any) {
+    const tenant = req.tenant || {};
+    const settings = tenant.settings || {};
+    return ApiResponseDto.success({
+      messenger: settings.messenger || null,
+      telegram: settings.telegram || null,
+    });
+  }
+
+  @Patch('channels')
+  @Roles('ADMIN')
+  async updateChannels(@Body() body: { messenger?: any; telegram?: any }, @Req() req: any) {
+    const tenantId = req.tenant?.id;
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    const currentSettings = (typeof tenant!.settings === 'string'
+      ? JSON.parse(tenant!.settings)
+      : tenant!.settings) || {};
+
+    if (body.messenger !== undefined) {
+      currentSettings.messenger = body.messenger;
+    }
+    if (body.telegram !== undefined) {
+      currentSettings.telegram = body.telegram;
+    }
+
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { settings: currentSettings },
+    });
+
+    return ApiResponseDto.success({
+      messenger: currentSettings.messenger || null,
+      telegram: currentSettings.telegram || null,
+    });
+  }
+
   @Post('query')
   async query(@Body() dto: AiQueryDto, @Req() req: any) {
     const tenant = req.tenant || {};
@@ -61,6 +99,10 @@ export class AiQueryController {
       question: dto.question,
       customerId: dto.customerId,
       allowGeneralKnowledge: allowGeneral,
+      categoryId: dto.categoryId,
+      documentType: dto.documentType,
+      audience: dto.audience,
+      tags: dto.tags,
     });
 
     return ApiResponseDto.success(result);
@@ -85,6 +127,10 @@ export class AiQueryController {
         question: dto.question,
         customerId: dto.customerId,
         allowGeneralKnowledge: allowGeneral,
+        categoryId: dto.categoryId,
+        documentType: dto.documentType,
+        audience: dto.audience,
+        tags: dto.tags,
       });
 
       for await (const chunk of stream) {

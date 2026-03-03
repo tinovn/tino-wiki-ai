@@ -16,6 +16,27 @@ export class TelegramController {
   ) {}
 
   /**
+   * Register webhook URL with Telegram for a tenant.
+   * Must be declared BEFORE :tenantSlug to avoid route conflict.
+   */
+  @Public()
+  @Post(':tenantSlug/setup')
+  async setupWebhook(
+    @Param('tenantSlug') tenantSlug: string,
+    @Body() body: { baseUrl?: string },
+    @Req() req: any,
+  ) {
+    const appUrl = body?.baseUrl
+      || this.configService.get<string>('app.url')
+      || this.configService.get<string>('APP_URL')
+      || `${req.protocol}://${req.get('host')}`;
+
+    const result = await this.telegramService.setupWebhook(tenantSlug, appUrl);
+    this.logger.log(`Telegram webhook setup for ${tenantSlug}: ${JSON.stringify(result)}`);
+    return result;
+  }
+
+  /**
    * Incoming messages from Telegram Bot.
    * Returns 200 immediately (fire-and-forget) to avoid Telegram timeout.
    */
@@ -34,22 +55,5 @@ export class TelegramController {
     });
 
     return { status: 'ok' };
-  }
-
-  /**
-   * Register webhook URL with Telegram for a tenant.
-   * Call this after configuring tenant.settings.telegram.
-   */
-  @Public()
-  @Post(':tenantSlug/setup')
-  async setupWebhook(@Param('tenantSlug') tenantSlug: string) {
-    const appUrl = this.configService.get<string>('app.url') || this.configService.get<string>('APP_URL');
-    if (!appUrl) {
-      return { ok: false, description: 'APP_URL not configured' };
-    }
-
-    const result = await this.telegramService.setupWebhook(tenantSlug, appUrl);
-    this.logger.log(`Telegram webhook setup for ${tenantSlug}: ${JSON.stringify(result)}`);
-    return result;
   }
 }
